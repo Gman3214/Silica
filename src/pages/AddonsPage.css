@@ -1,0 +1,110 @@
+.addons-page {
+  flex: 1;
+  height: 100vh;
+  background: var(--bg-primary);
+  overflow-y: auto;
+}
+
+.install-addon-btn {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.install-addon-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.addons-content {
+  padding: 30px;
+}
+
+.addons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.addon-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 25px;
+  transition: all 0.2s ease;
+}
+
+.addon-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+.addon-icon {
+  font-size: 48px;
+  margin-bottom: 15px;
+}
+
+.addon-card h3 {
+  color: var(--text-primary);
+  font-size: 18px;
+  margin: 0 0 10px 0;
+}
+
+.addon-card p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 20px 0;
+}
+
+.addon-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+}
+
+.addon-status {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.addon-status.installed {
+  color: var(--state-success);
+}
+
+.addon-btn {
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.addon-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.addon-btn.primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: none;
+}
+
+.addon-btn.primary:hover {
+  background: var(--accent-hover);
+}

@@ -1,0 +1,109 @@
+/* ===========================================
+   SILICA COLOR SYSTEM
+   ===========================================
+   Centralized color definitions for the entire app.
+   Change colors here to update the entire theme.
+   =========================================== */
+
+:root {
+  /* Light Mode Colors - Silica Light Theme */
+  --color-primary-bg: #FFFFFF;           /* Silica White - Main background */
+  --color-secondary-bg: #F5F5F5;         /* Cloud Grey - Cards, sidebars */
+  --color-tertiary-bg: #EEEEEE;          /* Slightly darker grey for inputs */
+  
+  --color-text-primary: #1C1C1C;         /* Slate Black - Main text */
+  --color-text-secondary: #999999;       /* Mist Grey - Hints, timestamps */
+  --color-text-tertiary: #CCCCCC;        /* Very light grey - Disabled text */
+  
+  --color-accent-primary: #008080;       /* Deep Reservoir (Muted Deep Teal) - Buttons, links */
+  --color-accent-hover: #006666;         /* Darker teal for hover states */
+  --color-accent-light: rgba(0, 128, 128, 0.1); /* Transparent teal for backgrounds */
+  
+  --color-border: rgba(0, 0, 0, 0.1);    /* Light borders */
+  --color-border-focus: #008080;         /* Border on focus */
+  
+  --color-success: #28A745;              /* Success states */
+  --color-warning: #FFC107;              /* Warning states */
+  --color-error: #DC3545;                /* Error states */
+  
+  /* Scrollbar colors */
+  --color-scrollbar-track: #F5F5F5;
+  --color-scrollbar-thumb: #CCCCCC;
+  --color-scrollbar-thumb-hover: #999999;
+  
+  /* Shadow */
+  --color-shadow: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] {
+  /* Dark Mode Colors - Silica Dark Theme */
+  --color-primary-bg: #1A1A1A;           /* Silica Deep - Main background */
+  --color-secondary-bg: #2C2C2C;         /* Obsidian - Cards, sidebars */
+  --color-tertiary-bg: #333333;          /* Slightly lighter for inputs */
+  
+  --color-text-primary: #FAFAFA;         /* Snow White - Main text */
+  --color-text-secondary: #AAAAAA;       /* Light Grey - Hints, timestamps */
+  --color-text-tertiary: #666666;        /* Darker grey - Disabled text */
+  
+  --color-accent-primary: #4DB8B8;       /* Lighter Teal - Buttons, links */
+  --color-accent-hover: #66C7C7;         /* Even lighter teal for hover states */
+  --color-accent-light: rgba(77, 184, 184, 0.1); /* Transparent teal for backgrounds */
+  
+  --color-border: rgba(255, 255, 255, 0.1); /* Light borders */
+  --color-border-focus: #4DB8B8;         /* Border on focus */
+  
+  --color-success: #4ADE80;              /* Success states */
+  --color-warning: #FBBF24;              /* Warning states */
+  --color-error: #F87171;                /* Error states */
+  
+  /* Scrollbar colors */
+  --color-scrollbar-track: #1A1A1A;
+  --color-scrollbar-thumb: #3C3C3C;
+  --color-scrollbar-thumb-hover: #4C4C4C;
+  
+  /* Shadow */
+  --color-shadow: rgba(0, 0, 0, 0.3);
+}
+
+/* ===========================================
+   SEMANTIC COLOR ALIASES
+   ===========================================
+   Use these in your components for better
+   readability and maintainability
+   =========================================== */
+
+:root, [data-theme="dark"] {
+  /* Backgrounds */
+  --bg-primary: var(--color-primary-bg);
+  --bg-secondary: var(--color-secondary-bg);
+  --bg-tertiary: var(--color-tertiary-bg);
+  --bg-hover: var(--color-accent-light);
+  
+  /* Text */
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --text-on-accent: #FFFFFF;
+  
+  /* Accent/Actions */
+  --accent: var(--color-accent-primary);
+  --accent-hover: var(--color-accent-hover);
+  --accent-light: var(--color-accent-light);
+  
+  /* Borders */
+  --border: var(--color-border);
+  --border-focus: var(--color-border-focus);
+  
+  /* States */
+  --state-success: var(--color-success);
+  --state-warning: var(--color-warning);
+  --state-error: var(--color-error);
+  --bg-error: var(--color-error);
+  --bg-error-hover: #C82333;
+  
+  /* Effects */
+  --shadow: var(--color-shadow);
+  --scrollbar-track: var(--color-scrollbar-track);
+  --scrollbar-thumb: var(--color-scrollbar-thumb);
+  --scrollbar-thumb-hover: var(--color-scrollbar-thumb-hover);
+}

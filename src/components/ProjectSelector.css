@@ -1,0 +1,67 @@
+.project-selector-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.project-selector-modal {
+  text-align: center;
+  padding: 60px 40px;
+  max-width: 500px;
+}
+
+.project-selector-icon {
+  color: var(--accent);
+  margin-bottom: 30px;
+  display: flex;
+  justify-content: center;
+}
+
+.project-selector-modal h1 {
+  color: var(--text-primary);
+  font-size: 32px;
+  font-weight: 600;
+  margin: 0 0 15px 0;
+}
+
+.project-selector-modal p {
+  color: var(--text-secondary);
+  font-size: 16px;
+  margin: 0 0 40px 0;
+}
+
+.select-folder-btn {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: none;
+  padding: 14px 32px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 20px;
+}
+
+.select-folder-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+}
+
+.select-folder-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hint-text {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
