@@ -10,6 +10,8 @@ interface Note {
   path: string;
   modified: number;
   isFolder?: boolean;
+  isWorkspace?: boolean;
+  workspaceColor?: string;
 }
 
 interface Tab {
@@ -37,8 +39,13 @@ const MainPage: React.FC = () => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; note: Note } | null>(null);
   const [openTabs, setOpenTabs] = useState<Tab[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<Array<{ name: string; path: string; color: string }>>([]);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('New Folder');
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState('New Workspace');
+  const [newWorkspaceColor, setNewWorkspaceColor] = useState('#3b82f6');
   const [draggedNote, setDraggedNote] = useState<Note | null>(null);
   const [folderContents, setFolderContents] = useState<Map<string, Note[]>>(new Map());
   const [tags, setTags] = useState<{ [tag: string]: Array<{ name: string; path: string }> }>({});
@@ -106,9 +113,21 @@ const MainPage: React.FC = () => {
       const notesList = await window.electronAPI.listNotes(folderPath);
       setNotes(notesList);
       
+      // Extract workspaces
+      const workspaceItems = notesList.filter(note => note.isWorkspace).map(note => ({
+        name: note.name,
+        path: note.path,
+        color: note.workspaceColor || '#3b82f6',
+      }));
+      setWorkspaces(workspaceItems);
+      
       // If there are notes and autoSelectFirst is true, select the first one
-      if (notesList.length > 0 && autoSelectFirst) {
-        loadNote(notesList[0].path);
+      // But only select actual notes, not folders or workspaces
+      if (autoSelectFirst) {
+        const actualNotes = notesList.filter(note => !note.isFolder && !note.isWorkspace);
+        if (actualNotes.length > 0) {
+          loadNote(actualNotes[0].path);
+        }
       }
     } catch (error) {
       console.error('Failed to load notes:', error);
@@ -123,6 +142,49 @@ const MainPage: React.FC = () => {
       setTags(allTags);
     } catch (error) {
       console.error('Failed to load tags:', error);
+    }
+  };
+
+  // Filter tags based on active workspace
+  const getFilteredTags = () => {
+    const taggedNotes = Object.entries(tags);
+    const filteredTags: { [tag: string]: Array<{ name: string; path: string }> } = {};
+
+    for (const [tag, tagNotes] of taggedNotes) {
+      const workspaceFilteredNotes = tagNotes.filter(note => {
+        if (activeWorkspace === null) {
+          // In Shared workspace: only show notes from root directory
+          const noteDir = note.path.substring(0, note.path.lastIndexOf('/'));
+          return noteDir === projectPath;
+        } else {
+          // In a specific workspace: only show notes from that workspace
+          return note.path.startsWith(activeWorkspace + '/');
+        }
+      });
+
+      // Only include tags that have notes in the current workspace
+      if (workspaceFilteredNotes.length > 0) {
+        filteredTags[tag] = workspaceFilteredNotes;
+      }
+    }
+
+    return filteredTags;
+  };
+
+  // Get list of tag names for autocomplete
+  const getWorkspaceTagNames = (): string[] => {
+    const filteredTags = getFilteredTags();
+    return Object.keys(filteredTags);
+  };
+
+  // Filter notes based on active workspace
+  const getFilteredNotes = () => {
+    if (activeWorkspace === null) {
+      // Show only root-level notes (shared)
+      return notes.filter(note => !note.isFolder && !note.isWorkspace);
+    } else {
+      // Show notes from the selected workspace
+      return folderContents.get(activeWorkspace) || [];
     }
   };
 
@@ -160,6 +222,119 @@ const MainPage: React.FC = () => {
       }
       return newSet;
     });
+  };
+
+  const handleWorkspaceSelect = async (workspacePath: string | null) => {
+    setActiveWorkspace(workspacePath);
+    
+    // If selecting a workspace (not shared), load its contents
+    if (workspacePath && !folderContents.has(workspacePath)) {
+      try {
+        const contents = await window.electronAPI.listNotes(workspacePath);
+        setFolderContents(prev => {
+          const newMap = new Map(prev);
+          newMap.set(workspacePath, contents);
+          return newMap;
+        });
+      } catch (error) {
+        console.error('Failed to load workspace contents:', error);
+      }
+    }
+  };
+
+  const handleWorkspaceNameChange = async (workspacePath: string | null, newName: string) => {
+    if (!workspacePath || !newName.trim()) return;
+
+    try {
+      const config = await window.electronAPI.getWorkspaceConfig(workspacePath);
+      await window.electronAPI.updateWorkspaceConfig(workspacePath, newName, config.color);
+      
+      // Refresh the notes list to update workspace names
+      if (projectPath) {
+        await loadNotes(projectPath);
+      }
+    } catch (error) {
+      console.error('Failed to update workspace name:', error);
+    }
+  };
+
+  const handleWorkspaceColorChange = async (workspacePath: string | null, newColor: string) => {
+    if (!workspacePath) return;
+
+    try {
+      const config = await window.electronAPI.getWorkspaceConfig(workspacePath);
+      await window.electronAPI.updateWorkspaceConfig(workspacePath, config.name, newColor);
+      
+      // Refresh the notes list to update workspace colors
+      if (projectPath) {
+        await loadNotes(projectPath, false);
+      }
+    } catch (error) {
+      console.error('Failed to update workspace color:', error);
+    }
+  };
+
+  const handleWorkspaceDelete = async (workspacePath: string | null) => {
+    if (!workspacePath || !projectPath) return;
+
+    try {
+      await window.electronAPI.deleteFolder(workspacePath);
+      
+      // Switch to Shared workspace after deletion
+      setActiveWorkspace(null);
+      
+      // Refresh the notes list
+      await loadNotes(projectPath, false);
+    } catch (error) {
+      console.error('Failed to delete workspace:', error);
+      alert('Failed to delete workspace: ' + error);
+    }
+  };
+
+  const handleWorkspaceSettings = (workspacePath: string | null) => {
+    // TODO: Implement workspace settings dialog
+    console.log('Open settings for workspace:', workspacePath);
+  };
+
+  const handleWorkspaceDrop = async (workspacePath: string | null, e: React.DragEvent) => {
+    if (!draggedNote || !projectPath) return;
+
+    const targetPath = workspacePath || projectPath;
+    
+    // Don't do anything if dropping in the same workspace
+    const currentWorkspacePath = draggedNote.path.substring(0, draggedNote.path.lastIndexOf('/'));
+    if (currentWorkspacePath === targetPath) return;
+
+    try {
+      await window.electronAPI.moveNote(draggedNote.path, targetPath);
+      
+      // Refresh the notes list
+      await loadNotes(projectPath);
+      
+      // Refresh the target workspace contents if it's not the root
+      if (workspacePath && folderContents.has(workspacePath)) {
+        const contents = await window.electronAPI.listNotes(workspacePath);
+        setFolderContents(prev => {
+          const newMap = new Map(prev);
+          newMap.set(workspacePath, contents);
+          return newMap;
+        });
+      }
+      
+      // Refresh the source workspace contents if it was in a workspace
+      if (currentWorkspacePath !== projectPath && folderContents.has(currentWorkspacePath)) {
+        const sourceContents = await window.electronAPI.listNotes(currentWorkspacePath);
+        setFolderContents(prev => {
+          const newMap = new Map(prev);
+          newMap.set(currentWorkspacePath, sourceContents);
+          return newMap;
+        });
+      }
+      
+      setDraggedNote(null);
+    } catch (error) {
+      console.error('Failed to move note to workspace:', error);
+    }
   };
 
   const loadNote = async (filePath: string) => {
@@ -205,10 +380,23 @@ const MainPage: React.FC = () => {
 
     try {
       const title = 'Untitled Note';
-      const filePath = await window.electronAPI.createNote(projectPath, title);
+      // Create note in active workspace or root
+      const targetPath = activeWorkspace || projectPath;
+      const filePath = await window.electronAPI.createNote(targetPath, title);
       
       await loadNotes(projectPath);
       await loadTags(projectPath);
+      
+      // Refresh workspace contents if in a workspace
+      if (activeWorkspace) {
+        const contents = await window.electronAPI.listNotes(activeWorkspace);
+        setFolderContents(prev => {
+          const newMap = new Map(prev);
+          newMap.set(activeWorkspace, contents);
+          return newMap;
+        });
+      }
+      
       loadNote(filePath);
     } catch (error) {
       console.error('Failed to create note:', error);
@@ -223,6 +411,34 @@ const MainPage: React.FC = () => {
     
     setCreatingFolder(true);
     setNewFolderName('New Folder');
+  };
+
+  // Generate a random color for workspace
+  const generateWorkspaceColor = () => {
+    const colors = [
+      '#3b82f6', // blue
+      '#ef4444', // red
+      '#10b981', // green
+      '#f59e0b', // amber
+      '#8b5cf6', // violet
+      '#ec4899', // pink
+      '#14b8a6', // teal
+      '#f97316', // orange
+      '#6366f1', // indigo
+      '#06b6d4', // cyan
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
+  };
+
+  const createNewWorkspace = async () => {
+    if (!projectPath) {
+      console.error('No project path set');
+      return;
+    }
+    
+    setCreatingWorkspace(true);
+    setNewWorkspaceName('New Workspace');
+    setNewWorkspaceColor(generateWorkspaceColor());
   };
 
   const confirmCreateFolder = async () => {
@@ -248,6 +464,41 @@ const MainPage: React.FC = () => {
   const cancelCreateFolder = () => {
     setCreatingFolder(false);
     setNewFolderName('New Folder');
+  };
+
+  const confirmCreateWorkspace = async (finalName?: string) => {
+    if (!projectPath) {
+      setCreatingWorkspace(false);
+      return;
+    }
+
+    // Use provided name or fall back to state
+    const workspaceName = finalName !== undefined ? finalName : newWorkspaceName.trim();
+    
+    if (!workspaceName) {
+      setCreatingWorkspace(false);
+      return;
+    }
+
+    try {
+      console.log('Creating workspace:', workspaceName, 'with color:', newWorkspaceColor);
+      await window.electronAPI.createWorkspace(projectPath, workspaceName, newWorkspaceColor);
+      console.log('Workspace created, reloading notes...');
+      await loadNotes(projectPath);
+      setCreatingWorkspace(false);
+      setNewWorkspaceName('New Workspace');
+      setNewWorkspaceColor('#3b82f6');
+    } catch (error) {
+      console.error('Failed to create workspace:', error);
+      alert('Failed to create workspace: ' + error);
+      setCreatingWorkspace(false);
+    }
+  };
+
+  const cancelCreateWorkspace = () => {
+    setCreatingWorkspace(false);
+    setNewWorkspaceName('New Workspace');
+    setNewWorkspaceColor('#3b82f6');
   };
 
   const toggleFolder = async (folderPath: string) => {
@@ -593,8 +844,11 @@ const MainPage: React.FC = () => {
       />
       <div className="notes-container">
         <NotesSidebar
-          notes={notes}
-          tags={tags}
+          notes={getFilteredNotes()}
+          allNotes={notes}
+          workspaces={workspaces}
+          activeWorkspace={activeWorkspace}
+          tags={getFilteredTags()}
           selectedNote={selectedNote}
           expandedFolders={expandedFolders}
           expandedTags={expandedTags}
@@ -602,11 +856,20 @@ const MainPage: React.FC = () => {
           draggedNote={draggedNote}
           creatingFolder={creatingFolder}
           newFolderName={newFolderName}
+          creatingWorkspace={creatingWorkspace}
+          newWorkspaceName={newWorkspaceName}
+          newWorkspaceColor={newWorkspaceColor}
           isLoading={isLoading}
           onNoteClick={loadNote}
           onContextMenu={handleContextMenu}
           onToggleFolder={toggleFolder}
           onToggleTag={toggleTag}
+          onWorkspaceSelect={handleWorkspaceSelect}
+          onWorkspaceNameChange={handleWorkspaceNameChange}
+          onWorkspaceColorChange={handleWorkspaceColorChange}
+          onWorkspaceDelete={handleWorkspaceDelete}
+          onWorkspaceSettings={handleWorkspaceSettings}
+          onWorkspaceDrop={handleWorkspaceDrop}
           onNoteDragStart={handleNoteDragStart}
           onNoteDragEnd={handleNoteDragEnd}
           onFolderDragOver={handleFolderDragOver}
@@ -616,8 +879,11 @@ const MainPage: React.FC = () => {
           onNewFolderNameChange={setNewFolderName}
           onConfirmCreateFolder={confirmCreateFolder}
           onCancelCreateFolder={cancelCreateFolder}
+          onConfirmCreateWorkspace={confirmCreateWorkspace}
+          onCancelCreateWorkspace={cancelCreateWorkspace}
           onNewNote={createNewNote}
           onNewFolder={createNewFolder}
+          onNewWorkspace={createNewWorkspace}
           formatDate={formatDate}
         />
         {contextMenu && (
@@ -635,6 +901,7 @@ const MainPage: React.FC = () => {
           noteContent={noteContent}
           openTabs={openTabs}
           notes={notes}
+          workspaceTags={getWorkspaceTagNames()}
           onTitleChange={setNoteTitle}
           onTitleBlur={() => renameNote(noteTitle)}
           onContentChange={setNoteContent}

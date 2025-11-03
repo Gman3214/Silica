@@ -5,7 +5,7 @@ export interface AutocompleteItem {
   id: string;
   label: string;
   subtitle?: string;
-  type?: 'note' | 'create' | 'create-and-move';
+  type?: 'note' | 'create' | 'create-and-move' | 'tag';
 }
 
 interface AutocompleteProps {
@@ -52,19 +52,25 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
       style={{ left: position.x, top: position.y }}
       onClick={(e) => e.stopPropagation()}
     >
-      {items.map((item, index) => (
-        <div
-          key={item.id}
-          className={`autocomplete-item ${index === selectedIndex ? 'selected' : ''} ${item.type === 'create' || item.type === 'create-and-move' ? 'create-option' : ''}`}
-          onClick={() => onSelect(item)}
-          onMouseEnter={() => {}}
-        >
-          <div className="autocomplete-label">{item.label}</div>
-          {item.subtitle && (
-            <div className="autocomplete-subtitle">{item.subtitle}</div>
-          )}
-        </div>
-      ))}
+      {items.map((item, index) => {
+        const isCreateOption = item.type === 'create' || item.type === 'create-and-move';
+        const isTagOption = item.type === 'tag';
+        const className = `autocomplete-item ${index === selectedIndex ? 'selected' : ''} ${isCreateOption ? 'create-option' : ''} ${isTagOption ? 'tag-option' : ''}`;
+        
+        return (
+          <div
+            key={item.id}
+            className={className}
+            onClick={() => onSelect(item)}
+            onMouseEnter={() => {}}
+          >
+            <div className="autocomplete-label">{item.label}</div>
+            {item.subtitle && (
+              <div className="autocomplete-subtitle">{item.subtitle}</div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };

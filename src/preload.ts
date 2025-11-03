@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listNotes: (folderPath: string) => ipcRenderer.invoke('list-notes', folderPath),
   createNote: (folderPath: string, title: string) => ipcRenderer.invoke('create-note', folderPath, title),
   createFolder: (parentPath: string, folderName: string) => ipcRenderer.invoke('create-folder', parentPath, folderName),
+  createWorkspace: (parentPath: string, workspaceName: string, color: string) => ipcRenderer.invoke('create-workspace', parentPath, workspaceName, color),
+  getWorkspaceConfig: (workspacePath: string) => ipcRenderer.invoke('get-workspace-config', workspacePath),
+  updateWorkspaceConfig: (workspacePath: string, name: string, color: string) => ipcRenderer.invoke('update-workspace-config', workspacePath, name, color),
   moveNote: (notePath: string, targetFolderPath: string) => ipcRenderer.invoke('move-note', notePath, targetFolderPath),
   getAllTags: (folderPath: string) => ipcRenderer.invoke('get-all-tags', folderPath),
   searchNotes: (folderPath: string, query: string) => ipcRenderer.invoke('search-notes', folderPath, query),
@@ -33,9 +36,12 @@ export interface ElectronAPI {
   deleteNote: (filePath: string) => Promise<void>;
   deleteFolder: (folderPath: string) => Promise<void>;
   renameNote: (oldPath: string, newTitle: string) => Promise<string>;
-  listNotes: (folderPath: string) => Promise<Array<{ name: string; path: string; modified: number; isFolder: boolean }>>;
+  listNotes: (folderPath: string) => Promise<Array<{ name: string; path: string; modified: number; isFolder: boolean; isWorkspace?: boolean; workspaceColor?: string }>>;
   createNote: (folderPath: string, title: string) => Promise<string>;
   createFolder: (parentPath: string, folderName: string) => Promise<string>;
+  createWorkspace: (parentPath: string, workspaceName: string, color: string) => Promise<string>;
+  getWorkspaceConfig: (workspacePath: string) => Promise<{ name: string; color: string; createdAt: number } | null>;
+  updateWorkspaceConfig: (workspacePath: string, name: string, color: string) => Promise<{ name: string; color: string; createdAt: number; updatedAt: number }>;
   moveNote: (notePath: string, targetFolderPath: string) => Promise<string>;
   getAllTags: (folderPath: string) => Promise<{ [tag: string]: Array<{ name: string; path: string }> }>;
   searchNotes: (folderPath: string, query: string) => Promise<Array<{

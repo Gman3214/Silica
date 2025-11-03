@@ -61,3 +61,19 @@
   background: var(--accent-light);
   border-left-color: var(--accent);
 }
+
+.autocomplete-item.tag-option .autocomplete-label {
+  color: var(--text-primary);
+}
+
+.autocomplete-item.tag-option .autocomplete-label::before {
+  content: '#';
+  color: var(--accent);
+  font-weight: 600;
+  margin-right: 2px;
+}
+
+.autocomplete-item.tag-option .autocomplete-subtitle {
+  color: var(--text-secondary);
+  font-style: italic;
+}

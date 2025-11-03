@@ -69,11 +69,26 @@ ipcMain.handle('list-notes', async (event, folderPath: string) => {
         const isDirectory = stats.isDirectory();
         
         if (isDirectory) {
+          // Check if it's a workspace (has .workspace.json)
+          const configPath = path.join(filePath, '.workspace.json');
+          let workspaceConfig = null;
+          
+          if (fs.existsSync(configPath)) {
+            try {
+              const configContent = fs.readFileSync(configPath, 'utf-8');
+              workspaceConfig = JSON.parse(configContent);
+            } catch (error) {
+              console.error('Error reading workspace config:', error);
+            }
+          }
+          
           return {
-            name: file,
+            name: workspaceConfig ? workspaceConfig.name : file,
             path: filePath,
             modified: stats.mtimeMs,
             isFolder: true,
+            isWorkspace: workspaceConfig !== null,
+            workspaceColor: workspaceConfig?.color,
           };
         } else if (file.endsWith('.md')) {
           return {
@@ -87,7 +102,9 @@ ipcMain.handle('list-notes', async (event, folderPath: string) => {
       })
       .filter(item => item !== null)
       .sort((a, b) => {
-        // Sort folders first, then by modified date
+        // Sort workspaces first, then notes, then by modified date
+        if (a.isWorkspace && !b.isWorkspace) return -1;
+        if (!a.isWorkspace && b.isWorkspace) return 1;
         if (a.isFolder && !b.isFolder) return -1;
         if (!a.isFolder && b.isFolder) return 1;
         return b.modified - a.modified;
@@ -280,21 +297,76 @@ ipcMain.handle('create-note', async (event, folderPath: string, title: string) =
   }
 });
 
-// Create a new folder
-ipcMain.handle('create-folder', async (event, parentPath: string, folderName: string) => {
+// Create a new workspace
+ipcMain.handle('create-workspace', async (event, parentPath: string, workspaceName: string, color: string) => {
   try {
-    // Sanitize folder name
-    const sanitizedName = folderName.replace(/[^a-zA-Z0-9 ]/g, '_');
-    const folderPath = path.join(parentPath, sanitizedName);
+    // Sanitize workspace name
+    const sanitizedName = workspaceName.replace(/[^a-zA-Z0-9 ]/g, '_');
+    const workspacePath = path.join(parentPath, sanitizedName);
     
-    // Create folder if it doesn't exist
-    if (!fs.existsSync(folderPath)) {
-      fs.mkdirSync(folderPath, { recursive: true });
+    // Create workspace folder if it doesn't exist
+    if (!fs.existsSync(workspacePath)) {
+      fs.mkdirSync(workspacePath, { recursive: true });
     }
     
-    return folderPath;
+    // Create workspace config file
+    const configPath = path.join(workspacePath, '.workspace.json');
+    const config = {
+      name: workspaceName,
+      color: color,
+      createdAt: Date.now(),
+    };
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+    
+    return workspacePath;
   } catch (error) {
-    console.error('Error creating folder:', error);
+    console.error('Error creating workspace:', error);
+    throw error;
+  }
+});
+
+// Get workspace config
+ipcMain.handle('get-workspace-config', async (event, workspacePath: string) => {
+  try {
+    const configPath = path.join(workspacePath, '.workspace.json');
+    
+    if (fs.existsSync(configPath)) {
+      const configContent = fs.readFileSync(configPath, 'utf-8');
+      return JSON.parse(configContent);
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error reading workspace config:', error);
+    return null;
+  }
+});
+
+// Update workspace config
+ipcMain.handle('update-workspace-config', async (event, workspacePath: string, name: string, color: string) => {
+  try {
+    const configPath = path.join(workspacePath, '.workspace.json');
+    
+    let config: any = {
+      createdAt: Date.now(),
+    };
+    
+    // Read existing config if it exists
+    if (fs.existsSync(configPath)) {
+      const configContent = fs.readFileSync(configPath, 'utf-8');
+      config = JSON.parse(configContent);
+    }
+    
+    // Update config
+    config.name = name;
+    config.color = color;
+    config.updatedAt = Date.now();
+    
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+    
+    return config;
+  } catch (error) {
+    console.error('Error updating workspace config:', error);
     throw error;
   }
 });

@@ -1,0 +1,94 @@
+.workspace-tabs-container {
+  border-bottom: 2px solid var(--border);
+  background: var(--bg-secondary);
+  padding: 8px 8px 0 8px;
+}
+
+.workspace-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.workspace-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  min-width: 32px;
+  height: 32px;
+}
+
+.workspace-tab::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.workspace-tab:hover {
+  background: var(--bg-hover);
+}
+
+.workspace-tab.active {
+  background: var(--bg-primary);
+}
+
+.workspace-tab.active::after {
+  background: var(--workspace-color, #6b7280);
+}
+
+.workspace-tab.drag-over {
+  background: var(--bg-hover);
+  opacity: 0.8;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.workspace-tab-icon {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.workspace-tab:hover .workspace-tab-icon {
+  transform: scale(1.1);
+}
+
+.workspace-tab-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.workspace-tab-add:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace-tab-add:active {
+  transform: scale(0.95);
+}

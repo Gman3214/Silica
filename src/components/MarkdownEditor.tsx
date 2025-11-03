@@ -21,6 +21,7 @@ interface MarkdownEditorProps {
   onNoteLink?: (notePath: string) => void;
   currentNotePath?: string;
   onCreateNote?: (title: string, openNote: boolean, updatedContent?: string) => Promise<string | void>;
+  workspaceTags?: string[];
 }
 
 // Create a view plugin to add line-level decorations for headers
@@ -513,7 +514,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   notes = [],
   onNoteLink,
   currentNotePath,
-  onCreateNote
+  onCreateNote,
+  workspaceTags = []
 }) => {
   const [autocomplete, setAutocomplete] = useState<{
     show: boolean;
@@ -579,6 +581,22 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     }
 
     return items;
+  };
+
+  // Filter tags based on query
+  const filterTags = (query: string): AutocompleteItem[] => {
+    const lowerQuery = query.toLowerCase();
+    const filteredTags = workspaceTags
+      .filter(tag => tag.toLowerCase().includes(lowerQuery))
+      .map(tag => ({
+        id: tag,
+        label: tag,
+        subtitle: 'Tag',
+        type: 'tag' as const
+      }))
+      .slice(0, 10);
+
+    return filteredTags;
   };
 
   // Handle clicks on [[note]] links
@@ -718,27 +736,44 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     const cursorPos = viewUpdate.state.selection.main.head;
     const textBefore = newValue.substring(0, cursorPos);
     const lastAtIndex = textBefore.lastIndexOf('@');
+    const lastHashIndex = textBefore.lastIndexOf('#');
 
-    // Check if we're in an @ mention
-    if (lastAtIndex !== -1) {
-      const textAfterAt = textBefore.substring(lastAtIndex + 1);
+    // Determine which trigger is more recent
+    const usingAtMention = lastAtIndex > lastHashIndex;
+    const triggerIndex = usingAtMention ? lastAtIndex : lastHashIndex;
+
+    // Check if we're in an @ mention or # tag
+    if (triggerIndex !== -1) {
+      const textAfterTrigger = textBefore.substring(triggerIndex + 1);
       
-      // Only show autocomplete if there's no space after @ (still typing the mention)
-      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
-        const query = textAfterAt;
-        const filteredNotes = filterNotes(query);
+      // Only show autocomplete if there's no space after trigger (still typing)
+      if (!textAfterTrigger.includes(' ') && !textAfterTrigger.includes('\n')) {
+        const query = textAfterTrigger;
+        
+        // For tags, require at least one character after #
+        if (!usingAtMention && query.length === 0) {
+          setAutocomplete(null);
+          return;
+        }
+        
+        const filteredItems = usingAtMention ? filterNotes(query) : filterTags(query);
 
-        // Get cursor coordinates
-        const coords = viewUpdate.view.coordsAtPos(cursorPos);
-        if (coords) {
-          setAutocomplete({
-            show: true,
-            position: { x: coords.left, y: coords.bottom + 5 },
-            query,
-            items: filteredNotes,
-            selectedIndex: 0,
-            startPos: lastAtIndex
-          });
+        // Only show autocomplete if there are items to show
+        if (filteredItems.length > 0) {
+          // Get cursor coordinates
+          const coords = viewUpdate.view.coordsAtPos(cursorPos);
+          if (coords) {
+            setAutocomplete({
+              show: true,
+              position: { x: coords.left, y: coords.bottom + 5 },
+              query,
+              items: filteredItems,
+              selectedIndex: 0,
+              startPos: triggerIndex
+            });
+          }
+        } else {
+          setAutocomplete(null);
         }
       } else {
         setAutocomplete(null);
@@ -755,6 +790,28 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     const cursorPos = editorRef.current.state.selection.main.head;
     const beforeMention = value.substring(0, autocomplete.startPos);
     const afterCursor = value.substring(cursorPos);
+    
+    // Handle tag selection
+    if (item.type === 'tag') {
+      const tag = `#${item.label}`;
+      const newValue = beforeMention + tag + afterCursor;
+      
+      onChange(newValue);
+      setAutocomplete(null);
+
+      // Move cursor after the tag
+      setTimeout(() => {
+        if (editorRef.current) {
+          const newPos = autocomplete.startPos + tag.length;
+          const docLength = editorRef.current.state.doc.length;
+          const clampedPos = Math.min(newPos, docLength);
+          editorRef.current.dispatch({
+            selection: { anchor: clampedPos, head: clampedPos }
+          });
+        }
+      }, 10);
+      return;
+    }
     
     // Handle create note actions
     if (item.type === 'create' || item.type === 'create-and-move') {

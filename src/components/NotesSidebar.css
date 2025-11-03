@@ -14,7 +14,8 @@
 }
 
 .add-note-btn,
-.add-folder-btn {
+.add-folder-btn,
+.add-workspace-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -31,12 +32,14 @@
 }
 
 .add-note-btn:hover,
-.add-folder-btn:hover {
+.add-folder-btn:hover,
+.add-workspace-btn:hover {
   background: var(--accent);
   color: var(--text-on-accent);
 }
 
 .add-note-btn:active,
-.add-folder-btn:active {
+.add-folder-btn:active,
+.add-workspace-btn:active {
   transform: scale(0.95);
 }

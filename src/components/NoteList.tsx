@@ -6,6 +6,8 @@ interface Note {
   path: string;
   modified: number;
   isFolder?: boolean;
+  isWorkspace?: boolean;
+  workspaceColor?: string;
 }
 
 interface NoteListProps {
@@ -32,6 +34,7 @@ interface NoteListProps {
   onNewFolderNameChange: (name: string) => void;
   onConfirmCreateFolder: () => void;
   onCancelCreateFolder: () => void;
+  onNewNote: () => void;
   formatDate: (timestamp: number) => string;
 }
 
@@ -59,6 +62,7 @@ const NoteList: React.FC<NoteListProps> = ({
   onNewFolderNameChange,
   onConfirmCreateFolder,
   onCancelCreateFolder,
+  onNewNote,
   formatDate,
 }) => {
   return (
@@ -71,6 +75,16 @@ const NoteList: React.FC<NoteListProps> = ({
         <div className="loading">Loading notes...</div>
       ) : (
         <>
+          {/* Add Note Button */}
+          <button className="add-note-list-btn" onClick={onNewNote} title="New Note">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 2H10L13 5V14H3V2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M10 2V5H13" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M8 7V11M6 9H10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <span>New Note</span>
+          </button>
+          
           {creatingFolder && (
             <div className="folder-item creating">
               <div className="folder-header">
@@ -142,70 +156,19 @@ const NoteList: React.FC<NoteListProps> = ({
                 </div>
               ))}
               
-              {/* Render folders and notes */}
-              {notes.map((note) => (
-                <div key={note.path}>
-                  {note.isFolder ? (
-                    <div 
-                      className={`folder-item ${draggedNote && !draggedNote.isFolder ? 'drop-target' : ''}`}
-                      onDragOver={onFolderDragOver}
-                      onDrop={(e) => onFolderDrop(e, note)}
-                    >
-                      <div 
-                        className="folder-header"
-                        onClick={() => onToggleFolder(note.path)}
-                        onContextMenu={(e) => onContextMenu(e, note)}
-                      >
-                        <svg 
-                          width="12" 
-                          height="12" 
-                          viewBox="0 0 12 12" 
-                          fill="none"
-                          className={`folder-chevron ${expandedFolders.has(note.path) ? 'expanded' : ''}`}
-                        >
-                          <path d="M3 5L6 8L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="folder-icon">
-                          <path d="M2 4H7L8 5H14V13H2V4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                        </svg>
-                        <h3>{note.name}</h3>
-                      </div>
-                      {expandedFolders.has(note.path) && (
-                        <div className="folder-contents">
-                          {folderContents.get(note.path)?.length === 0 ? (
-                            <div className="empty-folder">Empty folder</div>
-                          ) : (
-                            folderContents.get(note.path)?.map((subNote) => (
-                              <div 
-                                key={subNote.path}
-                                className={`note-item ${selectedNote === subNote.path ? 'active' : ''} ${draggedNote?.path === subNote.path ? 'dragging' : ''}`}
-                                onClick={() => onNoteClick(subNote.path)}
-                                onContextMenu={(e) => onContextMenu(e, subNote)}
-                                draggable={!subNote.isFolder}
-                                onDragStart={(e) => onNoteDragStart(e, subNote)}
-                                onDragEnd={onNoteDragEnd}
-                              >
-                                <h3>{subNote.name}</h3>
-                                <span className="note-date">{formatDate(subNote.modified)}</span>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div 
-                      className={`note-item ${selectedNote === note.path ? 'active' : ''} ${draggedNote?.path === note.path ? 'dragging' : ''}`}
-                      onClick={() => onNoteClick(note.path)}
-                      onContextMenu={(e) => onContextMenu(e, note)}
-                      draggable
-                      onDragStart={(e) => onNoteDragStart(e, note)}
-                      onDragEnd={onNoteDragEnd}
-                    >
-                      <h3>{note.name}</h3>
-                      <span className="note-date">{formatDate(note.modified)}</span>
-                    </div>
-                  )}
+              {/* Render notes */}
+              {notes.filter(note => !note.isFolder && !note.isWorkspace).map((note) => (
+                <div 
+                  key={note.path}
+                  className={`note-item ${selectedNote === note.path ? 'active' : ''} ${draggedNote?.path === note.path ? 'dragging' : ''}`}
+                  onClick={() => onNoteClick(note.path)}
+                  onContextMenu={(e) => onContextMenu(e, note)}
+                  draggable
+                  onDragStart={(e) => onNoteDragStart(e, note)}
+                  onDragEnd={onNoteDragEnd}
+                >
+                  <h3>{note.name}</h3>
+                  <span className="note-date">{formatDate(note.modified)}</span>
                 </div>
               ))}
             </>
@@ -217,3 +180,4 @@ const NoteList: React.FC<NoteListProps> = ({
 };
 
 export default NoteList;
+

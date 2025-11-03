@@ -21,6 +21,7 @@ interface EditorAreaProps {
   noteContent: string;
   openTabs: Tab[];
   notes: Note[];
+  workspaceTags?: string[];
   onTitleChange: (title: string) => void;
   onTitleBlur: () => void;
   onContentChange: (content: string) => void;
@@ -37,6 +38,7 @@ const EditorArea: React.FC<EditorAreaProps> = ({
   noteContent,
   openTabs,
   notes,
+  workspaceTags = [],
   onTitleChange,
   onTitleBlur,
   onContentChange,
@@ -89,6 +91,7 @@ const EditorArea: React.FC<EditorAreaProps> = ({
           onNoteLink={onNoteLink}
           currentNotePath={selectedNote || undefined}
           onCreateNote={onCreateNote}
+          workspaceTags={workspaceTags}
         />
       </div>
     </div>
