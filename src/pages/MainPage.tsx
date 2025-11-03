@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import MarkdownEditor from '../components/MarkdownEditor';
 import NoteNav from '../components/NoteNav';
-import NoteTabs from '../components/NoteTabs';
-import NoteList from '../components/NoteList';
+import NotesSidebar from '../components/NotesSidebar';
+import EditorArea from '../components/EditorArea';
+import SearchBar from '../components/SearchBar';
 import './MainPage.css';
 
 interface Note {
@@ -579,105 +579,47 @@ const MainPage: React.FC = () => {
 
   return (
     <div className="main-page">
-      <div className="global-search-header">
-        <div className="search-box-global">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="search-icon">
-            <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M12 12L16 16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-          <input 
-            type="text" 
-            placeholder="Search notes..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <div className="search-results-dropdown">
-              {searchResults.length === 0 ? (
-                <div className="search-result-item empty">
-                  No notes found
-                </div>
-              ) : (
-                searchResults.map((result) => (
-                  <div 
-                    key={result.path}
-                    className={`search-result-item ${selectedNote === result.path ? 'active' : ''}`}
-                    onClick={() => {
-                      if (!result.isFolder) {
-                        loadNote(result.path);
-                        setSearchQuery('');
-                      }
-                    }}
-                  >
-                    <div className="result-main">
-                      {result.isFolder ? (
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="result-icon">
-                          <path d="M2 4H7L8 5H14V13H2V4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                        </svg>
-                      ) : (
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="result-icon">
-                          <path d="M3 2H10L13 5V14H3V2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                          <path d="M10 2V5H13" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                        </svg>
-                      )}
-                      <div className="result-text">
-                        <span className="result-name">{result.name}</span>
-                        {result.snippet && (
-                          <span className="result-snippet">{result.snippet}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      <SearchBar
+        searchQuery={searchQuery}
+        searchResults={searchResults}
+        selectedNote={selectedNote}
+        onSearchChange={setSearchQuery}
+        onResultClick={(result) => {
+          if (!result.isFolder) {
+            loadNote(result.path);
+            setSearchQuery('');
+          }
+        }}
+      />
       <div className="notes-container">
-        <div className="notes-sidebar">
-          <div className="action-buttons">
-            <button className="add-note-btn" onClick={createNewNote} title="New Note">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 2H10L13 5V14H3V2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                <path d="M10 2V5H13" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                <path d="M8 7V11M6 9H10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            </button>
-            <button className="add-folder-btn" onClick={createNewFolder} title="New Folder">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4H7L8 5H14V13H2V4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                <path d="M8 8V11M6.5 9.5H9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            </button>
-          </div>
-          <NoteList
-            notes={notes}
-            tags={tags}
-            selectedNote={selectedNote}
-            expandedFolders={expandedFolders}
-            expandedTags={expandedTags}
-            folderContents={folderContents}
-            draggedNote={draggedNote}
-            creatingFolder={creatingFolder}
-            newFolderName={newFolderName}
-            isLoading={isLoading}
-            onNoteClick={loadNote}
-            onContextMenu={handleContextMenu}
-            onToggleFolder={toggleFolder}
-            onToggleTag={toggleTag}
-            onNoteDragStart={handleNoteDragStart}
-            onNoteDragEnd={handleNoteDragEnd}
-            onFolderDragOver={handleFolderDragOver}
-            onFolderDrop={handleFolderDrop}
-            onRootDragOver={handleRootDragOver}
-            onRootDrop={handleRootDrop}
-            onNewFolderNameChange={setNewFolderName}
-            onConfirmCreateFolder={confirmCreateFolder}
-            onCancelCreateFolder={cancelCreateFolder}
-            formatDate={formatDate}
-          />
-        </div>
+        <NotesSidebar
+          notes={notes}
+          tags={tags}
+          selectedNote={selectedNote}
+          expandedFolders={expandedFolders}
+          expandedTags={expandedTags}
+          folderContents={folderContents}
+          draggedNote={draggedNote}
+          creatingFolder={creatingFolder}
+          newFolderName={newFolderName}
+          isLoading={isLoading}
+          onNoteClick={loadNote}
+          onContextMenu={handleContextMenu}
+          onToggleFolder={toggleFolder}
+          onToggleTag={toggleTag}
+          onNoteDragStart={handleNoteDragStart}
+          onNoteDragEnd={handleNoteDragEnd}
+          onFolderDragOver={handleFolderDragOver}
+          onFolderDrop={handleFolderDrop}
+          onRootDragOver={handleRootDragOver}
+          onRootDrop={handleRootDrop}
+          onNewFolderNameChange={setNewFolderName}
+          onConfirmCreateFolder={confirmCreateFolder}
+          onCancelCreateFolder={cancelCreateFolder}
+          onNewNote={createNewNote}
+          onNewFolder={createNewFolder}
+          formatDate={formatDate}
+        />
         {contextMenu && (
           <NoteNav
             x={contextMenu.x}
@@ -687,51 +629,21 @@ const MainPage: React.FC = () => {
             onClose={() => setContextMenu(null)}
           />
         )}
-        <div className="editor-container">
-          {selectedNote ? (
-            <>
-              {openTabs.length > 0 && (
-                <NoteTabs
-                  tabs={openTabs}
-                  activeTab={selectedNote}
-                  onTabSelect={loadNote}
-                  onTabClose={handleTabClose}
-                  onTabsReorder={handleTabsReorder}
-                />
-              )}
-              <div className="editor-header">
-                <input 
-                  type="text" 
-                  className="note-title-input" 
-                  placeholder="Untitled Note" 
-                  value={noteTitle}
-                  onChange={(e) => setNoteTitle(e.target.value)}
-                  onBlur={() => renameNote(noteTitle)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.currentTarget.blur();
-                    }
-                  }}
-                />
-              </div>
-              <div className="editor">
-                <MarkdownEditor
-                  value={noteContent}
-                  onChange={setNoteContent}
-                  placeholder="Start writing..."
-                  notes={notes}
-                  onNoteLink={(notePath: string) => loadNote(notePath)}
-                  currentNotePath={selectedNote || undefined}
-                  onCreateNote={createNoteFromEditor}
-                />
-              </div>
-            </>
-          ) : (
-            <div className="no-note-selected">
-              <p>Select a note or create a new one</p>
-            </div>
-          )}
-        </div>
+        <EditorArea
+          selectedNote={selectedNote}
+          noteTitle={noteTitle}
+          noteContent={noteContent}
+          openTabs={openTabs}
+          notes={notes}
+          onTitleChange={setNoteTitle}
+          onTitleBlur={() => renameNote(noteTitle)}
+          onContentChange={setNoteContent}
+          onNoteLink={loadNote}
+          onCreateNote={createNoteFromEditor}
+          onTabSelect={loadNote}
+          onTabClose={handleTabClose}
+          onTabsReorder={handleTabsReorder}
+        />
       </div>
     </div>
   );

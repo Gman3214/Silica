@@ -1,0 +1,44 @@
+.editor-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+.editor-header {
+  padding: 20px 30px;
+  flex-shrink: 0;
+  border: none;
+  border-top: none;
+}
+
+.note-title-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 28px;
+  font-weight: 600;
+  outline: none;
+}
+
+.note-title-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.editor {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+  border: none;
+}
+
+.no-note-selected {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 16px;
+}

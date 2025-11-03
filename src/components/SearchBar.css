@@ -1,0 +1,15 @@
+.global-search-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 20px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  min-height: 44px;
+}
+
+.search-box-global {
+  position: relative;
+  width: 700px;
+  max-width: 90%;
+}
