@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MarkdownEditor from '../components/MarkdownEditor';
 import NoteNav from '../components/NoteNav';
 import NoteTabs from '../components/NoteTabs';
+import NoteList from '../components/NoteList';
 import './MainPage.css';
 
 interface Note {
@@ -650,157 +651,32 @@ const MainPage: React.FC = () => {
               </svg>
             </button>
           </div>
-          <div 
-            className="notes-list"
-            onDragOver={handleRootDragOver}
-            onDrop={handleRootDrop}
-          >
-            {isLoading ? (
-              <div className="loading">Loading notes...</div>
-            ) : (
-              <>
-                {creatingFolder && (
-                  <div className="folder-item creating">
-                    <div className="folder-header">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="folder-icon">
-                        <path d="M2 4H7L8 5H14V13H2V4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                      </svg>
-                      <input
-                        type="text"
-                        className="folder-name-input"
-                        value={newFolderName}
-                        onChange={(e) => setNewFolderName(e.target.value)}
-                        onBlur={confirmCreateFolder}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            confirmCreateFolder();
-                          } else if (e.key === 'Escape') {
-                            cancelCreateFolder();
-                          }
-                        }}
-                        autoFocus
-                        onFocus={(e) => e.target.select()}
-                      />
-                    </div>
-                  </div>
-                )}
-                {notes.length === 0 && Object.keys(tags).length === 0 && !creatingFolder ? (
-                  <div className="empty-state">
-                    No notes yet. Create one!
-                  </div>
-                ) : (
-                  <>
-                    {/* Render tags */}
-                    {Object.entries(tags).sort(([a], [b]) => a.localeCompare(b)).map(([tag, tagNotes]) => (
-                      <div key={`tag-${tag}`} className="folder-item tag-item">
-                        <div 
-                          className="folder-header"
-                          onClick={() => toggleTag(tag)}
-                        >
-                          <svg 
-                            width="12" 
-                            height="12" 
-                            viewBox="0 0 12 12" 
-                            fill="none"
-                            className={`folder-chevron ${expandedTags.has(tag) ? 'expanded' : ''}`}
-                          >
-                            <path d="M3 5L6 8L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="tag-icon">
-                            <path d="M3 3L9 3L13 7L8 12L4 8L3 3Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                            <circle cx="7.5" cy="6.5" r="1" fill="currentColor"/>
-                          </svg>
-                          <h3>{tag}</h3>
-                          <span className="tag-count">{tagNotes.length}</span>
-                        </div>
-                        {expandedTags.has(tag) && (
-                          <div className="folder-contents">
-                            {tagNotes.map((note) => (
-                              <div 
-                                key={note.path}
-                                className={`note-item ${selectedNote === note.path ? 'active' : ''}`}
-                                onClick={() => loadNote(note.path)}
-                                onContextMenu={(e) => handleContextMenu(e, note as Note)}
-                              >
-                                <h3>{note.name}</h3>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    
-                    {/* Render folders and notes */}
-                    {notes.map((note) => (
-                      <div key={note.path}>
-                        {note.isFolder ? (
-                          <div 
-                            className={`folder-item ${draggedNote && !draggedNote.isFolder ? 'drop-target' : ''}`}
-                            onDragOver={handleFolderDragOver}
-                            onDrop={(e) => handleFolderDrop(e, note)}
-                          >
-                            <div 
-                              className="folder-header"
-                              onClick={() => toggleFolder(note.path)}
-                              onContextMenu={(e) => handleContextMenu(e, note)}
-                            >
-                              <svg 
-                                width="12" 
-                                height="12" 
-                                viewBox="0 0 12 12" 
-                                fill="none"
-                                className={`folder-chevron ${expandedFolders.has(note.path) ? 'expanded' : ''}`}
-                              >
-                                <path d="M3 5L6 8L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                              </svg>
-                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="folder-icon">
-                                <path d="M2 4H7L8 5H14V13H2V4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                              </svg>
-                              <h3>{note.name}</h3>
-                            </div>
-                            {expandedFolders.has(note.path) && (
-                              <div className="folder-contents">
-                                {folderContents.get(note.path)?.length === 0 ? (
-                                  <div className="empty-folder">Empty folder</div>
-                                ) : (
-                                  folderContents.get(note.path)?.map((subNote) => (
-                                    <div 
-                                      key={subNote.path}
-                                      className={`note-item ${selectedNote === subNote.path ? 'active' : ''} ${draggedNote?.path === subNote.path ? 'dragging' : ''}`}
-                                      onClick={() => loadNote(subNote.path)}
-                                      onContextMenu={(e) => handleContextMenu(e, subNote)}
-                                      draggable={!subNote.isFolder}
-                                      onDragStart={(e) => handleNoteDragStart(e, subNote)}
-                                      onDragEnd={handleNoteDragEnd}
-                                    >
-                                      <h3>{subNote.name}</h3>
-                                      <span className="note-date">{formatDate(subNote.modified)}</span>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div 
-                            className={`note-item ${selectedNote === note.path ? 'active' : ''} ${draggedNote?.path === note.path ? 'dragging' : ''}`}
-                            onClick={() => loadNote(note.path)}
-                            onContextMenu={(e) => handleContextMenu(e, note)}
-                            draggable
-                            onDragStart={(e) => handleNoteDragStart(e, note)}
-                            onDragEnd={handleNoteDragEnd}
-                          >
-                            <h3>{note.name}</h3>
-                            <span className="note-date">{formatDate(note.modified)}</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-          </div>
+          <NoteList
+            notes={notes}
+            tags={tags}
+            selectedNote={selectedNote}
+            expandedFolders={expandedFolders}
+            expandedTags={expandedTags}
+            folderContents={folderContents}
+            draggedNote={draggedNote}
+            creatingFolder={creatingFolder}
+            newFolderName={newFolderName}
+            isLoading={isLoading}
+            onNoteClick={loadNote}
+            onContextMenu={handleContextMenu}
+            onToggleFolder={toggleFolder}
+            onToggleTag={toggleTag}
+            onNoteDragStart={handleNoteDragStart}
+            onNoteDragEnd={handleNoteDragEnd}
+            onFolderDragOver={handleFolderDragOver}
+            onFolderDrop={handleFolderDrop}
+            onRootDragOver={handleRootDragOver}
+            onRootDrop={handleRootDrop}
+            onNewFolderNameChange={setNewFolderName}
+            onConfirmCreateFolder={confirmCreateFolder}
+            onCancelCreateFolder={cancelCreateFolder}
+            formatDate={formatDate}
+          />
         </div>
         {contextMenu && (
           <NoteNav
