@@ -271,7 +271,8 @@
 }
 
 .folder-contents {
-  padding-left: 20px;
+  padding-left: 12px;
+  margin-top: 4px;
 }
 
 .empty-folder {
@@ -301,7 +302,6 @@
 
 .note-item.active {
   background: var(--bg-hover);
-  border-left: 3px solid var(--accent);
 }
 
 .note-item h3 {

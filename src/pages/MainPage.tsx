@@ -3,6 +3,7 @@ import NoteNav from '../components/NoteNav';
 import NotesSidebar from '../components/NotesSidebar';
 import EditorArea from '../components/EditorArea';
 import SearchBar from '../components/SearchBar';
+import RightSidebar from '../components/RightSidebar';
 import './MainPage.css';
 
 interface Note {
@@ -12,6 +13,7 @@ interface Note {
   isFolder?: boolean;
   isWorkspace?: boolean;
   workspaceColor?: string;
+  content?: string;
 }
 
 interface Tab {
@@ -50,6 +52,10 @@ const MainPage: React.FC = () => {
   const [folderContents, setFolderContents] = useState<Map<string, Note[]>>(new Map());
   const [tags, setTags] = useState<{ [tag: string]: Array<{ name: string; path: string }> }>({});
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const [isResizing, setIsResizing] = useState(false);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(300);
+  const [isResizingRight, setIsResizingRight] = useState(false);
 
   // Load project path and notes on component mount
   useEffect(() => {
@@ -311,6 +317,9 @@ const MainPage: React.FC = () => {
       // Refresh the notes list
       await loadNotes(projectPath);
       
+      // Reload tags to reflect the workspace change
+      await loadTags(projectPath);
+      
       // Refresh the target workspace contents if it's not the root
       if (workspacePath && folderContents.has(workspacePath)) {
         const contents = await window.electronAPI.listNotes(workspacePath);
@@ -366,10 +375,12 @@ const MainPage: React.FC = () => {
   };
 
   const saveCurrentNote = async () => {
-    if (!selectedNote) return;
+    if (!selectedNote || !projectPath) return;
 
     try {
       await window.electronAPI.saveNote(selectedNote, noteContent);
+      // Reload tags after saving to capture any new or changed tags
+      await loadTags(projectPath);
     } catch (error) {
       console.error('Failed to save note:', error);
     }
@@ -559,6 +570,9 @@ const MainPage: React.FC = () => {
       await window.electronAPI.moveNote(draggedNote.path, targetFolder.path);
       await loadNotes(projectPath);
       
+      // Reload tags to reflect any workspace changes
+      await loadTags(projectPath);
+      
       // Refresh target folder contents if it's expanded
       if (expandedFolders.has(targetFolder.path)) {
         const contents = await window.electronAPI.listNotes(targetFolder.path);
@@ -612,6 +626,9 @@ const MainPage: React.FC = () => {
       await window.electronAPI.moveNote(draggedNote.path, projectPath);
       await loadNotes(projectPath);
       
+      // Reload tags to reflect any workspace changes
+      await loadTags(projectPath);
+      
       // Refresh source folder contents if it's expanded
       if (sourceFolderPath && sourceFolderPath !== projectPath && expandedFolders.has(sourceFolderPath)) {
         const sourceContents = await window.electronAPI.listNotes(sourceFolderPath);
@@ -647,6 +664,8 @@ const MainPage: React.FC = () => {
         // If updatedContent is provided, use it; otherwise use current noteContent
         const contentToSave = updatedContent !== undefined ? updatedContent : noteContent;
         await window.electronAPI.saveNote(selectedNote, contentToSave);
+        // Reload tags after saving to capture any new or changed tags
+        await loadTags(projectPath);
       }
       
       // Create the new note
@@ -654,6 +673,7 @@ const MainPage: React.FC = () => {
       
       // Reload the notes list to include the new note, but don't auto-select
       await loadNotes(projectPath, false);
+      await loadTags(projectPath);
       
       // If openNote is true, navigate to the new note
       if (openNote) {
@@ -733,8 +753,29 @@ const MainPage: React.FC = () => {
     try {
       await window.electronAPI.deleteNote(filePath);
       
-      // If we're deleting the selected note, clear selection
-      if (filePath === selectedNote) {
+      // Close the tab if it's open
+      const tabIndex = openTabs.findIndex(tab => tab.path === filePath);
+      if (tabIndex !== -1) {
+        setOpenTabs(prev => prev.filter(tab => tab.path !== filePath));
+        
+        // If the deleted note was the selected one, switch to another tab or clear
+        if (filePath === selectedNote) {
+          if (openTabs.length > 1) {
+            // Switch to the previous tab or the next one
+            const newIndex = tabIndex > 0 ? tabIndex - 1 : 0;
+            const remainingTabs = openTabs.filter(tab => tab.path !== filePath);
+            if (remainingTabs[newIndex]) {
+              loadNote(remainingTabs[newIndex].path);
+            }
+          } else {
+            // No other tabs, clear selection
+            setSelectedNote(null);
+            setNoteTitle('');
+            setNoteContent('');
+          }
+        }
+      } else if (filePath === selectedNote) {
+        // If not in tabs but is selected, clear selection
         setSelectedNote(null);
         setNoteTitle('');
         setNoteContent('');
@@ -754,6 +795,24 @@ const MainPage: React.FC = () => {
 
     try {
       await window.electronAPI.deleteFolder(folderPath);
+      
+      // Close any tabs that were inside this folder
+      const tabsToClose = openTabs.filter(tab => tab.path.startsWith(folderPath + '/'));
+      if (tabsToClose.length > 0) {
+        setOpenTabs(prev => prev.filter(tab => !tab.path.startsWith(folderPath + '/')));
+        
+        // If the selected note was in this folder, clear or switch
+        if (selectedNote && selectedNote.startsWith(folderPath + '/')) {
+          const remainingTabs = openTabs.filter(tab => !tab.path.startsWith(folderPath + '/'));
+          if (remainingTabs.length > 0) {
+            loadNote(remainingTabs[0].path);
+          } else {
+            setSelectedNote(null);
+            setNoteTitle('');
+            setNoteContent('');
+          }
+        }
+      }
       
       // Clear expanded state for this folder
       setExpandedFolders(prev => {
@@ -828,6 +887,116 @@ const MainPage: React.FC = () => {
     return date.toLocaleDateString();
   };
 
+  // Get all notes with their content for the right sidebar
+  const getAllNotesWithContent = async (): Promise<Note[]> => {
+    const allNotes: Note[] = [];
+    
+    const collectNotes = (notesList: Note[]) => {
+      for (const note of notesList) {
+        if (!note.isFolder && !note.isWorkspace) {
+          allNotes.push(note);
+        }
+      }
+    };
+
+    // Collect notes from main list
+    collectNotes(notes);
+
+    // Collect notes from folder contents
+    folderContents.forEach((contents) => {
+      collectNotes(contents);
+    });
+
+    // Load content for each note
+    const notesWithContent = await Promise.all(
+      allNotes.map(async (note) => {
+        try {
+          const content = await window.electronAPI.readNote(note.path);
+          return { ...note, content };
+        } catch (error) {
+          return note;
+        }
+      })
+    );
+
+    return notesWithContent;
+  };
+
+  const [notesWithContent, setNotesWithContent] = useState<Note[]>([]);
+
+  // Update notes with content when notes change
+  useEffect(() => {
+    const updateNotesWithContent = async () => {
+      const allNotes = await getAllNotesWithContent();
+      setNotesWithContent(allNotes);
+    };
+    
+    if (projectPath) {
+      updateNotesWithContent();
+    }
+  }, [notes, folderContents, noteContent]); // Re-run when notes or content changes
+
+  // Handle sidebar resize
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault();
+  };
+
+  const handleMouseDownRight = (e: React.MouseEvent) => {
+    setIsResizingRight(true);
+    e.preventDefault();
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const newWidth = e.clientX;
+      if (newWidth >= 200 && newWidth <= 600) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingRight) return;
+      
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth >= 250 && newWidth <= 600) {
+        setRightSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingRight(false);
+    };
+
+    if (isResizingRight) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingRight]);
+
   return (
     <div className="main-page">
       <SearchBar
@@ -843,10 +1012,11 @@ const MainPage: React.FC = () => {
         }}
       />
       <div className="notes-container">
-        <NotesSidebar
-          notes={getFilteredNotes()}
-          allNotes={notes}
-          workspaces={workspaces}
+        <div className="notes-sidebar-wrapper" style={{ width: `${sidebarWidth}px` }}>
+          <NotesSidebar
+            notes={getFilteredNotes()}
+            allNotes={notes}
+            workspaces={workspaces}
           activeWorkspace={activeWorkspace}
           tags={getFilteredTags()}
           selectedNote={selectedNote}
@@ -886,6 +1056,11 @@ const MainPage: React.FC = () => {
           onNewWorkspace={createNewWorkspace}
           formatDate={formatDate}
         />
+          <div 
+            className="sidebar-resize-handle"
+            onMouseDown={handleMouseDown}
+          />
+        </div>
         {contextMenu && (
           <NoteNav
             x={contextMenu.x}
@@ -895,22 +1070,39 @@ const MainPage: React.FC = () => {
             onClose={() => setContextMenu(null)}
           />
         )}
-        <EditorArea
-          selectedNote={selectedNote}
-          noteTitle={noteTitle}
-          noteContent={noteContent}
-          openTabs={openTabs}
-          notes={notes}
-          workspaceTags={getWorkspaceTagNames()}
-          onTitleChange={setNoteTitle}
-          onTitleBlur={() => renameNote(noteTitle)}
-          onContentChange={setNoteContent}
-          onNoteLink={loadNote}
-          onCreateNote={createNoteFromEditor}
-          onTabSelect={loadNote}
-          onTabClose={handleTabClose}
-          onTabsReorder={handleTabsReorder}
-        />
+        <div className="editor-area-wrapper">
+          <EditorArea
+            selectedNote={selectedNote}
+            noteTitle={noteTitle}
+            noteContent={noteContent}
+            openTabs={openTabs}
+            notes={notes}
+            workspaceTags={getWorkspaceTagNames()}
+            onTitleChange={setNoteTitle}
+            onTitleBlur={() => renameNote(noteTitle)}
+            onContentChange={setNoteContent}
+            onNoteLink={loadNote}
+            onCreateNote={createNoteFromEditor}
+            onTabSelect={loadNote}
+            onTabClose={handleTabClose}
+            onTabsReorder={handleTabsReorder}
+          />
+        </div>
+        <div className="right-sidebar-wrapper" style={{ width: `${rightSidebarWidth}px` }}>
+          <div 
+            className="right-sidebar-resize-handle"
+            onMouseDown={handleMouseDownRight}
+          />
+          <RightSidebar
+            currentNote={selectedNote ? {
+              path: selectedNote,
+              name: noteTitle,
+              content: noteContent
+            } : null}
+            allNotes={notesWithContent}
+            onNoteClick={loadNote}
+          />
+        </div>
       </div>
     </div>
   );

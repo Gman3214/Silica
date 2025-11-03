@@ -142,8 +142,8 @@ const hideMarkdownPlugin = ViewPlugin.fromClass(class {
     // Collect all decorations first, then add them sorted
     const decorations: Array<{ from: number; to: number; decoration: Decoration }> = [];
     
-    // Find all tags (#tagname - # without space after it)
-    const tagRegex = /#([a-zA-Z0-9_-]+)(?=\s|$)/g;
+    // Find all tags (#tagname - # without space after it, supports dots for hierarchy)
+    const tagRegex = /#([a-zA-Z0-9_.-]+)(?=\s|$)/g;
     let tagMatch;
     
     while ((tagMatch = tagRegex.exec(text)) !== null) {

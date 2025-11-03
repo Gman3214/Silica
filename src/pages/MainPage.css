@@ -3,7 +3,10 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  width: 100vw;
+  max-width: 100vw;
   background: var(--bg-primary);
+  overflow: hidden;
 }
 
 .page-header {
@@ -42,4 +45,80 @@
   display: flex;
   flex: 1;
   overflow: hidden;
+}
+
+.notes-sidebar-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-width: 600px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.editor-area-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.2s ease;
+  z-index: 100;
+}
+
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle:active::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
+
+.right-sidebar-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 250px;
+  max-width: 600px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+}
+
+.right-sidebar-resize-handle {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.2s ease;
+  z-index: 100;
+}
+
+.right-sidebar-resize-handle:hover::after,
+.right-sidebar-resize-handle:active::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
 }

@@ -1,14 +1,17 @@
 .workspace-tabs-container {
   border-bottom: 2px solid var(--border);
   background: var(--bg-secondary);
-  padding: 8px 8px 0 8px;
+  padding: 6px 8px 0 8px;
+  overflow: hidden;
 }
 
 .workspace-tabs {
   display: flex;
   gap: 4px;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
+  align-items: flex-end;
 }
 
 .workspace-tabs::-webkit-scrollbar {
@@ -28,6 +31,7 @@
   position: relative;
   min-width: 32px;
   height: 32px;
+  flex-shrink: 0;
 }
 
 .workspace-tab::after {

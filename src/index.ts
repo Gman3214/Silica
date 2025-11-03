@@ -143,7 +143,7 @@ ipcMain.handle('get-all-tags', async (event, folderPath: string) => {
           scanDirectory(filePath); // Recursive scan
         } else if (file.endsWith('.md')) {
           const content = fs.readFileSync(filePath, 'utf-8');
-          const tagRegex = /#([a-zA-Z0-9_-]+)(?=\s|$)/g;
+          const tagRegex = /#([a-zA-Z0-9_.-]+)(?=\s|$)/g;
           let match;
           
           while ((match = tagRegex.exec(content)) !== null) {
