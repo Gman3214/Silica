@@ -5,6 +5,7 @@ export interface AutocompleteItem {
   id: string;
   label: string;
   subtitle?: string;
+  type?: 'note' | 'create' | 'create-and-move';
 }
 
 interface AutocompleteProps {
@@ -54,7 +55,7 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
       {items.map((item, index) => (
         <div
           key={item.id}
-          className={`autocomplete-item ${index === selectedIndex ? 'selected' : ''}`}
+          className={`autocomplete-item ${index === selectedIndex ? 'selected' : ''} ${item.type === 'create' || item.type === 'create-and-move' ? 'create-option' : ''}`}
           onClick={() => onSelect(item)}
           onMouseEnter={() => {}}
         >

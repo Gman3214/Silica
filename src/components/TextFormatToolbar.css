@@ -1,0 +1,75 @@
+.text-format-toolbar {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px var(--shadow);
+  z-index: 1000;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 240px;
+}
+
+.toolbar-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.toolbar-btn {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.toolbar-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.toolbar-btn svg {
+  flex-shrink: 0;
+}
+
+.toolbar-btn-wide {
+  flex: 1;
+  justify-content: flex-start;
+  padding: 8px 10px;
+}
+
+.toolbar-btn-expand {
+  width: 100%;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.toolbar-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.toolbar-expanded .toolbar-btn-wide {
+  width: 100%;
+}
+
+/* Hover effect for buttons */
+.toolbar-btn:active {
+  transform: scale(0.95);
+}

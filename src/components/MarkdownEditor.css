@@ -34,6 +34,23 @@
   color: var(--text-on-accent) !important;
 }
 
+/* Style tags (#tagname) */
+.codemirror-wrapper .cm-tag {
+  color: var(--accent) !important;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 12px;
+  background-color: var(--accent-light);
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.codemirror-wrapper .cm-tag:hover {
+  background-color: var(--accent);
+  color: var(--text-on-accent) !important;
+}
+
 /* Ensure markdown styles are applied */
 .codemirror-wrapper .cm-line {
   color: var(--text-primary);
@@ -112,4 +129,56 @@
 .codemirror-wrapper .cm-formatting-header {
   color: var(--text-tertiary) !important;
   opacity: 0.5;
+}
+
+/* Enhanced selection styling */
+.codemirror-wrapper .cm-selectionBackground {
+  border-radius: 6px !important;
+}
+
+.codemirror-wrapper ::selection {
+  background-color: var(--accent-light) !important;
+  border-radius: 6px;
+}
+
+@keyframes selectionPulse {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.codemirror-wrapper .cm-selectionLayer .cm-selectionBackground {
+  animation: selectionPulse 0.2s ease-out;
+}
+
+/* Task checkbox styles */
+.codemirror-wrapper .task-checkbox {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  margin-right: 8px;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.codemirror-wrapper .task-checkbox .checkbox-icon {
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.codemirror-wrapper .task-checkbox:hover .checkbox-icon {
+  color: var(--accent);
+}
+
+.codemirror-wrapper .task-checkbox[data-checked="true"] .checkbox-icon {
+  color: var(--accent);
+}
+
+.codemirror-wrapper .task-checkbox[data-checked="true"] .checkbox-icon rect {
+  fill: var(--accent-light);
 }

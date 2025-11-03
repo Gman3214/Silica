@@ -1,0 +1,114 @@
+.note-tabs {
+  width: 100%;
+  background-color: var(--bg-secondary);
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  padding-bottom: 0;
+}
+
+.tabs-container {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  padding: 6px 8px 0 8px;
+  gap: 4px;
+}
+
+.tab-separator {
+  color: var(--text-tertiary);
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background-color: var(--bg-secondary);
+  border: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, width 0.2s ease;
+  position: relative;
+  flex-shrink: 0;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.tab.active {
+  background-color: var(--bg-primary);
+}
+
+.tab.drag-over {
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+}
+
+.tab-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.tab.active .tab-name {
+  font-weight: 500;
+}
+
+.tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.tab:hover .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tab-close:active {
+  transform: scale(0.9);
+}
+
+/* Scrollbar styling for tabs */
+.note-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.note-tabs::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.note-tabs::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.note-tabs::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}

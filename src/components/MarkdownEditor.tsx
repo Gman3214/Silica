@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
-import { EditorView, Decoration, DecorationSet, ViewPlugin, ViewUpdate, keymap } from '@codemirror/view';
+import { EditorView, Decoration, DecorationSet, ViewPlugin, ViewUpdate, keymap, WidgetType } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
 import { RangeSetBuilder, EditorState } from '@codemirror/state';
 import Autocomplete, { AutocompleteItem } from './Autocomplete';
+import TextFormatToolbar from './TextFormatToolbar';
 import './MarkdownEditor.css';
 
 interface Note {
@@ -19,6 +20,7 @@ interface MarkdownEditorProps {
   notes?: Note[];
   onNoteLink?: (notePath: string) => void;
   currentNotePath?: string;
+  onCreateNote?: (title: string, openNote: boolean, updatedContent?: string) => Promise<string | void>;
 }
 
 // Create a view plugin to add line-level decorations for headers
@@ -139,6 +141,40 @@ const hideMarkdownPlugin = ViewPlugin.fromClass(class {
     // Collect all decorations first, then add them sorted
     const decorations: Array<{ from: number; to: number; decoration: Decoration }> = [];
     
+    // Find all tags (#tagname - # without space after it)
+    const tagRegex = /#([a-zA-Z0-9_-]+)(?=\s|$)/g;
+    let tagMatch;
+    
+    while ((tagMatch = tagRegex.exec(text)) !== null) {
+      const tagFrom = tagMatch.index;
+      const tagTo = tagMatch.index + tagMatch[0].length;
+      
+      // Check if this is NOT a header (header would have space after #)
+      const charBefore = tagFrom > 0 ? text[tagFrom - 1] : '\n';
+      const isAtLineStart = charBefore === '\n' || tagFrom === 0;
+      
+      // If it's at line start, check if there's a space after the #
+      if (isAtLineStart) {
+        const charAfterHash = text[tagFrom + 1];
+        if (charAfterHash && charAfterHash !== ' ') {
+          // This is a tag, not a header
+          decorations.push({
+            from: tagFrom,
+            to: tagTo,
+            decoration: Decoration.mark({ class: 'cm-tag' })
+          });
+          continue;
+        }
+      } else {
+        // Not at line start, so it's definitely a tag
+        decorations.push({
+          from: tagFrom,
+          to: tagTo,
+          decoration: Decoration.mark({ class: 'cm-tag' })
+        });
+      }
+    }
+    
     // Find all [[note]] links and check if cursor is in any of them
     const linkRegex = /\[\[([^\]]+)\]\]/g;
     let match;
@@ -180,11 +216,18 @@ const hideMarkdownPlugin = ViewPlugin.fromClass(class {
             
             // Only hide formatting if cursor is NOT in the formatted range
             if (!cursorInRange) {
-              // Hide header marks (# ## ###)
+              // Hide header marks (# ## ###) and the space after them
               if (node.name === 'HeaderMark') {
+                const docLength = view.state.doc.length;
+                // Check if there's a space after the header mark
+                const charAfterMark = node.to < docLength ? view.state.doc.sliceString(node.to, node.to + 1) : '';
+                
+                // If there's a space after the header mark, include it in the hidden range
+                const endPos = charAfterMark === ' ' ? Math.min(node.to + 1, docLength) : node.to;
+                
                 decorations.push({
                   from: node.from,
-                  to: node.to,
+                  to: endPos,
                   decoration: Decoration.replace({})
                 });
               }
@@ -278,13 +321,199 @@ const noteLinkPlugin = ViewPlugin.fromClass(class {
   decorations: (v) => v.decorations,
 });
 
+// Plugin to style custom markdown (highlight and underline)
+const customMarkdownPlugin = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+
+  constructor(view: any) {
+    this.decorations = this.buildDecorations(view);
+  }
+
+  update(update: ViewUpdate) {
+    if (update.docChanged || update.viewportChanged || update.selectionSet) {
+      this.decorations = this.buildDecorations(update.view);
+    }
+  }
+
+  buildDecorations(view: any) {
+    const builder = new RangeSetBuilder<Decoration>();
+    const text = view.state.doc.toString();
+    const cursorPos = view.state.selection.main.head;
+    
+    // Collect all decorations first, then add them sorted
+    const decorations: Array<{ from: number; to: number; decoration: Decoration }> = [];
+    
+    // Find all ==highlight== patterns
+    const highlightRegex = /==([^=]+)==/g;
+    let match;
+    
+    while ((match = highlightRegex.exec(text)) !== null) {
+      const matchFrom = match.index;
+      const matchTo = match.index + match[0].length;
+      const cursorInMatch = cursorPos >= matchFrom && cursorPos <= matchTo;
+      
+      if (!cursorInMatch) {
+        // Hide the == markers
+        decorations.push({
+          from: matchFrom,
+          to: matchFrom + 2,
+          decoration: Decoration.replace({})
+        });
+        decorations.push({
+          from: matchTo - 2,
+          to: matchTo,
+          decoration: Decoration.replace({})
+        });
+      }
+      
+      // Style the entire match (including markers when visible)
+      decorations.push({
+        from: matchFrom,
+        to: matchTo,
+        decoration: Decoration.mark({
+          class: 'custom-highlight'
+        })
+      });
+    }
+    
+    // Find all <u>underline</u> patterns
+    const underlineRegex = /<u>([^<]+)<\/u>/g;
+    
+    while ((match = underlineRegex.exec(text)) !== null) {
+      const matchFrom = match.index;
+      const matchTo = match.index + match[0].length;
+      const contentFrom = matchFrom + 3; // After <u>
+      const contentTo = matchTo - 4; // Before </u>
+      const cursorInMatch = cursorPos >= matchFrom && cursorPos <= matchTo;
+      
+      if (!cursorInMatch) {
+        // Hide the <u> and </u> tags
+        decorations.push({
+          from: matchFrom,
+          to: contentFrom,
+          decoration: Decoration.replace({})
+        });
+        decorations.push({
+          from: contentTo,
+          to: matchTo,
+          decoration: Decoration.replace({})
+        });
+      }
+      
+      // Style the content with underline
+      decorations.push({
+        from: contentFrom,
+        to: contentTo,
+        decoration: Decoration.mark({
+          class: 'custom-underline'
+        })
+      });
+    }
+    
+    // Sort decorations by position and add to builder
+    decorations.sort((a, b) => a.from - b.from);
+    for (const { from, to, decoration } of decorations) {
+      builder.add(from, to, decoration);
+    }
+    
+    return builder.finish();
+  }
+}, {
+  decorations: (v) => v.decorations,
+});
+
+// Plugin to add interactive checkboxes for task lists
+const checkboxPlugin = (onChangeCallback: (newValue: string) => void) => ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+
+  constructor(view: any) {
+    this.decorations = this.buildDecorations(view);
+  }
+
+  update(update: ViewUpdate) {
+    if (update.docChanged || update.viewportChanged) {
+      this.decorations = this.buildDecorations(update.view);
+    }
+  }
+
+  buildDecorations(view: any) {
+    const builder = new RangeSetBuilder<Decoration>();
+    const text = view.state.doc.toString();
+    
+    // Match task list items: - [ ] or - [x]
+    const checkboxRegex = /^(\s*)-\s\[([ xX])\]\s/gm;
+    let match: RegExpExecArray | null;
+    
+    while ((match = checkboxRegex.exec(text)) !== null) {
+      const matchResult = match; // Capture for closure
+      const from = matchResult.index + matchResult[1].length; // After leading spaces
+      const checkboxEnd = from + matchResult[0].length - matchResult[1].length;
+      const isChecked = matchResult[2].toLowerCase() === 'x';
+      
+      // Create a widget for the checkbox
+      const checkbox = Decoration.widget({
+        widget: new class extends WidgetType {
+          toDOM() {
+            const span = document.createElement('span');
+            span.className = 'task-checkbox';
+            span.setAttribute('data-checked', isChecked.toString());
+            span.innerHTML = `
+              <svg width="16" height="16" viewBox="0 0 16 16" class="checkbox-icon">
+                <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                ${isChecked ? '<path d="M5 8L7 10L11 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' : ''}
+              </svg>
+            `;
+            
+            span.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              // Toggle the checkbox in the document
+              const newChecked = !isChecked;
+              const newCheckChar = newChecked ? 'x' : ' ';
+              const oldCheckbox = matchResult[0];
+              const newCheckbox = oldCheckbox.replace(/\[([ xX])\]/, `[${newCheckChar}]`);
+              
+              const transaction = view.state.update({
+                changes: {
+                  from: matchResult.index,
+                  to: matchResult.index + matchResult[0].length,
+                  insert: newCheckbox
+                }
+              });
+              
+              view.dispatch(transaction);
+              
+              // Call the onChange callback with the updated text
+              const newText = view.state.doc.toString();
+              onChangeCallback(newText);
+            });
+            
+            return span;
+          }
+        }(),
+        side: -1
+      });
+      
+      // Hide the markdown syntax
+      builder.add(from, from, checkbox);
+      builder.add(from, checkboxEnd, Decoration.replace({}));
+    }
+    
+    return builder.finish();
+  }
+}, {
+  decorations: (v) => v.decorations,
+});
+
 const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ 
   value, 
   onChange, 
   placeholder, 
   notes = [],
   onNoteLink,
-  currentNotePath
+  currentNotePath,
+  onCreateNote
 }) => {
   const [autocomplete, setAutocomplete] = useState<{
     show: boolean;
@@ -293,6 +522,12 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     items: AutocompleteItem[];
     selectedIndex: number;
     startPos: number;
+  } | null>(null);
+  
+  const [formatToolbar, setFormatToolbar] = useState<{
+    show: boolean;
+    position: { x: number; y: number };
+    selection: { from: number; to: number };
   } | null>(null);
   
   const editorRef = useRef<any>(null);
@@ -307,7 +542,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   // Filter notes based on query, excluding current note
   const filterNotes = (query: string): AutocompleteItem[] => {
     const lowerQuery = query.toLowerCase();
-    return notes
+    const filteredNotes = notes
       .filter(note => 
         note.name.toLowerCase().includes(lowerQuery) && 
         note.path !== currentNotePath
@@ -315,9 +550,35 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       .map(note => ({
         id: note.path,
         label: note.name,
-        subtitle: note.path.split(/[/\\]/).slice(-2, -1)[0] || ''
+        subtitle: note.path.split(/[/\\]/).slice(-2, -1)[0] || '',
+        type: 'note' as const
       }))
       .slice(0, 10);
+
+    // Check if there's an exact match
+    const hasExactMatch = notes.some(note => 
+      note.name.toLowerCase() === lowerQuery && 
+      note.path !== currentNotePath
+    );
+
+    // If query is not empty and no exact match, add create options
+    const items: AutocompleteItem[] = [...filteredNotes];
+    if (query.trim() && !hasExactMatch) {
+      items.push({
+        id: 'create-note',
+        label: `Create "${query}"`,
+        subtitle: 'Create new note',
+        type: 'create' as const
+      });
+      items.push({
+        id: 'create-and-move',
+        label: `Create "${query}" and move`,
+        subtitle: 'Create and open new note',
+        type: 'create-and-move' as const
+      });
+    }
+
+    return items;
   };
 
   // Handle clicks on [[note]] links
@@ -347,6 +608,106 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       return () => wrapper.removeEventListener('click', handleClick);
     }
   }, [notes, onNoteLink]);
+
+  // Handle text selection and show format toolbar on left click
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      // Small delay to let CodeMirror update the selection
+      setTimeout(() => {
+        if (!editorRef.current || !wrapperRef.current) return;
+
+        // Check if the click was inside the editor
+        const target = e.target as HTMLElement;
+        if (!wrapperRef.current.contains(target)) return;
+
+        // Check if we have a selection
+        const selection = editorRef.current.state.selection.main;
+        const hasSelection = selection.from !== selection.to;
+
+        if (hasSelection && e.button === 0) { // Left click
+          // Get the coordinates of the selection start and end
+          const coordsStart = editorRef.current.coordsAtPos(selection.from);
+          const coordsEnd = editorRef.current.coordsAtPos(selection.to);
+          
+          if (coordsEnd) {
+            // Approximate toolbar dimensions (will be adjusted by component)
+            const toolbarHeight = 200; // Approximate height when expanded
+            const toolbarWidth = 240; // From CSS min-width
+            
+            const viewportHeight = window.innerHeight;
+            const viewportWidth = window.innerWidth;
+            
+            let x = coordsEnd.left;
+            let y = coordsEnd.bottom + 5;
+            
+            // Check if toolbar would go off bottom of viewport
+            if (y + toolbarHeight > viewportHeight) {
+              // Position above the selection instead
+              y = (coordsStart?.top || coordsEnd.top) - toolbarHeight - 5;
+            }
+            
+            // Check if toolbar would go off right edge of viewport
+            if (x + toolbarWidth > viewportWidth) {
+              // Position from the right edge
+              x = viewportWidth - toolbarWidth - 10;
+            }
+            
+            // Make sure it doesn't go off left edge
+            if (x < 10) {
+              x = 10;
+            }
+            
+            // Make sure it doesn't go off top edge
+            if (y < 10) {
+              y = 10;
+            }
+            
+            setFormatToolbar({
+              show: true,
+              position: { x, y },
+              selection: { from: selection.from, to: selection.to }
+            });
+          }
+        } else {
+          // No selection, close toolbar
+          setFormatToolbar(null);
+        }
+      }, 10);
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Close toolbar if clicking outside of it
+      if (!target.closest('.text-format-toolbar')) {
+        setFormatToolbar(null);
+      }
+    };
+
+    // Also close toolbar when selection changes (e.g., clicking somewhere)
+    const handleSelectionChange = () => {
+      setTimeout(() => {
+        if (!editorRef.current) return;
+        
+        const selection = editorRef.current.state.selection.main;
+        const hasSelection = selection.from !== selection.to;
+        
+        if (!hasSelection) {
+          setFormatToolbar(null);
+        }
+      }, 10);
+    };
+
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('selectionchange', handleSelectionChange);
+    
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('selectionchange', handleSelectionChange);
+    };
+  }, []);
+
 
   // Handle @ key press
   const handleEditorChange = (newValue: string, viewUpdate: any) => {
@@ -388,14 +749,55 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   };
 
   // Handle autocomplete selection
-  const handleAutocompleteSelect = (item: AutocompleteItem) => {
+  const handleAutocompleteSelect = async (item: AutocompleteItem) => {
     if (!autocomplete || !editorRef.current) return;
 
     const cursorPos = editorRef.current.state.selection.main.head;
     const beforeMention = value.substring(0, autocomplete.startPos);
     const afterCursor = value.substring(cursorPos);
     
-    // Create a link format: [[NoteName]]
+    // Handle create note actions
+    if (item.type === 'create' || item.type === 'create-and-move') {
+      if (!onCreateNote) return;
+      
+      // Extract the note title from the label (format: 'Create "title"' or 'Create "title" and move')
+      const titleMatch = item.label.match(/Create "([^"]+)"/);
+      const noteTitle = titleMatch ? titleMatch[1] : autocomplete.query;
+      
+      const shouldOpen = item.type === 'create-and-move';
+      
+      try {
+        // Always insert the link to the new note in the current note
+        const link = `[[${noteTitle}]]`;
+        const newValue = beforeMention + link + afterCursor;
+        onChange(newValue);
+        
+        // Create the note (passing the updated content if we're moving)
+        await onCreateNote(noteTitle, shouldOpen, shouldOpen ? newValue : undefined);
+        
+        // If not opening, move cursor after the link in current note
+        if (!shouldOpen) {
+          setTimeout(() => {
+            if (editorRef.current) {
+              const newPos = autocomplete.startPos + link.length;
+              const docLength = editorRef.current.state.doc.length;
+              const clampedPos = Math.min(newPos, docLength);
+              editorRef.current.dispatch({
+                selection: { anchor: clampedPos, head: clampedPos }
+              });
+            }
+          }, 10);
+        }
+        // If opening, the MainPage will handle loading the new note
+      } catch (error) {
+        console.error('Failed to create note:', error);
+      }
+      
+      setAutocomplete(null);
+      return;
+    }
+    
+    // Handle regular note link selection
     const link = `[[${item.label}]]`;
     const newValue = beforeMention + link + afterCursor;
     
@@ -406,11 +808,93 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     setTimeout(() => {
       if (editorRef.current) {
         const newPos = autocomplete.startPos + link.length;
+        const docLength = editorRef.current.state.doc.length;
+        const clampedPos = Math.min(newPos, docLength);
         editorRef.current.dispatch({
-          selection: { anchor: newPos, head: newPos }
+          selection: { anchor: clampedPos, head: clampedPos }
         });
       }
     }, 10);
+  };
+
+  // Handle text formatting
+  const handleFormat = (format: string) => {
+    if (!formatToolbar || !editorRef.current) return;
+
+    const { from, to } = formatToolbar.selection;
+    const selectedText = value.substring(from, to);
+    const beforeText = value.substring(0, from);
+    const afterText = value.substring(to);
+
+    let newText = '';
+    let cursorOffset = 0;
+
+    switch (format) {
+      case 'bold':
+        newText = `**${selectedText}**`;
+        cursorOffset = newText.length;
+        break;
+      case 'italic':
+        newText = `*${selectedText}*`;
+        cursorOffset = newText.length;
+        break;
+      case 'underline':
+        newText = `<u>${selectedText}</u>`;
+        cursorOffset = newText.length;
+        break;
+      case 'highlight':
+        newText = `==${selectedText}==`;
+        cursorOffset = newText.length;
+        break;
+      case 'internal-link':
+        newText = `[[${selectedText}]]`;
+        cursorOffset = newText.length;
+        break;
+      case 'external-link':
+        newText = `[${selectedText}](url)`;
+        cursorOffset = newText.length - 4; // Position cursor at 'url'
+        break;
+      case 'bullet-list':
+        newText = `- ${selectedText}`;
+        cursorOffset = newText.length;
+        break;
+      case 'numbered-list':
+        newText = `1. ${selectedText}`;
+        cursorOffset = newText.length;
+        break;
+      case 'task-list':
+        newText = `- [ ] ${selectedText}`;
+        cursorOffset = newText.length;
+        break;
+      case 'heading':
+        newText = `## ${selectedText}`;
+        cursorOffset = newText.length;
+        break;
+      case 'quote':
+        newText = `> ${selectedText}`;
+        cursorOffset = newText.length;
+        break;
+      default:
+        return;
+    }
+
+    const newValue = beforeText + newText + afterText;
+    onChange(newValue);
+
+    // Update cursor position
+    setTimeout(() => {
+      if (editorRef.current) {
+        const newPos = from + cursorOffset;
+        const docLength = editorRef.current.state.doc.length;
+        const clampedPos = Math.min(newPos, docLength);
+        editorRef.current.dispatch({
+          selection: { anchor: clampedPos, head: clampedPos }
+        });
+        editorRef.current.focus();
+      }
+    }, 10);
+
+    setFormatToolbar(null);
   };
 
   // Handle keyboard navigation in autocomplete
@@ -494,9 +978,29 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     },
     '.cm-selectionBackground, ::selection': {
       backgroundColor: 'var(--accent-light) !important',
+      borderRadius: '6px',
+      padding: '2px 5px 5px 5px',
+      animation: 'selectionGrow 0.15s ease-out',
     },
     '&.cm-focused .cm-selectionBackground, &.cm-focused ::selection': {
       backgroundColor: 'var(--accent-light) !important',
+      borderRadius: '6px',
+      padding: '2px 5px 5px 5px',
+    },
+    '@keyframes selectionGrow': {
+      from: {
+        opacity: 0.5,
+        transform: 'scaleX(0.95)',
+      },
+      to: {
+        opacity: 1,
+        transform: 'scaleX(1)',
+      },
+    },
+    '.cm-selectionMatch': {
+      backgroundColor: 'var(--accent-light)',
+      borderRadius: '6px',
+      padding: '2px 5px 5px 5px',
     },
     '.cm-cursor, .cm-cursor-primary': {
       borderLeftColor: 'var(--text-primary)',
@@ -627,6 +1131,15 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       borderLeft: '3px solid var(--border)',
       paddingLeft: '10px',
     },
+    // Custom markdown styles
+    '.custom-highlight': {
+      backgroundColor: 'rgba(255, 235, 59, 0.3)',
+      color: 'var(--text-primary)',
+    },
+    '.custom-underline': {
+      textDecoration: 'underline !important',
+      color: 'var(--text-primary)',
+    },
   }, { dark: document.documentElement.getAttribute('data-theme') === 'dark' });
 
   return (
@@ -639,7 +1152,16 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         }}
         value={value}
         height="100%"
-        extensions={[markdown({ base: markdownLanguage }), headerLinePlugin, hideMarkdownPlugin, noteLinkPlugin, theme]}
+        extensions={[
+          markdown({ base: markdownLanguage }), 
+          headerLinePlugin, 
+          hideMarkdownPlugin, 
+          noteLinkPlugin,
+          customMarkdownPlugin,
+          checkboxPlugin(onChange),
+          theme,
+          EditorView.lineWrapping
+        ]}
         onChange={handleEditorChange}
         basicSetup={{
           lineNumbers: false,
@@ -669,6 +1191,14 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           selectedIndex={autocomplete.selectedIndex}
           onSelect={handleAutocompleteSelect}
           onClose={() => setAutocomplete(null)}
+        />
+      )}
+      {formatToolbar && formatToolbar.show && (
+        <TextFormatToolbar
+          x={formatToolbar.position.x}
+          y={formatToolbar.position.y}
+          onFormat={handleFormat}
+          onClose={() => setFormatToolbar(null)}
         />
       )}
     </div>

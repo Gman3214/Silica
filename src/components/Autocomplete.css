@@ -36,3 +36,28 @@
   color: var(--text-secondary);
   font-size: 11px;
 }
+
+.autocomplete-item.create-option {
+  margin-top: 4px;
+}
+
+.autocomplete-item.create-option:first-of-type {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.autocomplete-item.create-option .autocomplete-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.autocomplete-item.create-option .autocomplete-subtitle {
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+.autocomplete-item.create-option:hover,
+.autocomplete-item.create-option.selected {
+  background: var(--accent-light);
+  border-left-color: var(--accent);
+}

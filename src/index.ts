@@ -24,6 +24,7 @@ const createWindow = (): void => {
     width: 1400,
     minHeight: 600,
     minWidth: 800,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       contextIsolation: true,
@@ -61,20 +62,38 @@ ipcMain.handle('list-notes', async (event, folderPath: string) => {
     }
     
     const files = fs.readdirSync(folderPath);
-    const notes = files
-      .filter(file => file.endsWith('.md'))
+    const items = files
       .map(file => {
         const filePath = path.join(folderPath, file);
         const stats = fs.statSync(filePath);
-        return {
-          name: file.replace('.md', ''),
-          path: filePath,
-          modified: stats.mtimeMs,
-        };
+        const isDirectory = stats.isDirectory();
+        
+        if (isDirectory) {
+          return {
+            name: file,
+            path: filePath,
+            modified: stats.mtimeMs,
+            isFolder: true,
+          };
+        } else if (file.endsWith('.md')) {
+          return {
+            name: file.replace('.md', ''),
+            path: filePath,
+            modified: stats.mtimeMs,
+            isFolder: false,
+          };
+        }
+        return null;
       })
-      .sort((a, b) => b.modified - a.modified); // Sort by most recent
+      .filter(item => item !== null)
+      .sort((a, b) => {
+        // Sort folders first, then by modified date
+        if (a.isFolder && !b.isFolder) return -1;
+        if (!a.isFolder && b.isFolder) return 1;
+        return b.modified - a.modified;
+      });
     
-    return notes;
+    return items;
   } catch (error) {
     console.error('Error listing notes:', error);
     return [];
@@ -88,6 +107,148 @@ ipcMain.handle('read-note', async (event, filePath: string) => {
   } catch (error) {
     console.error('Error reading note:', error);
     return '';
+  }
+});
+
+// Get all tags from notes in a folder (recursive)
+ipcMain.handle('get-all-tags', async (event, folderPath: string) => {
+  try {
+    const tagsMap: { [tag: string]: Array<{ name: string; path: string }> } = {};
+    
+    const scanDirectory = (dirPath: string) => {
+      const files = fs.readdirSync(dirPath);
+      
+      for (const file of files) {
+        const filePath = path.join(dirPath, file);
+        const stats = fs.statSync(filePath);
+        
+        if (stats.isDirectory()) {
+          scanDirectory(filePath); // Recursive scan
+        } else if (file.endsWith('.md')) {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const tagRegex = /#([a-zA-Z0-9_-]+)(?=\s|$)/g;
+          let match;
+          
+          while ((match = tagRegex.exec(content)) !== null) {
+            const tag = match[1];
+            const noteName = file.replace('.md', '');
+            
+            if (!tagsMap[tag]) {
+              tagsMap[tag] = [];
+            }
+            
+            // Avoid duplicates
+            if (!tagsMap[tag].find(note => note.path === filePath)) {
+              tagsMap[tag].push({ name: noteName, path: filePath });
+            }
+          }
+        }
+      }
+    };
+    
+    scanDirectory(folderPath);
+    
+    return tagsMap;
+  } catch (error) {
+    console.error('Error getting tags:', error);
+    return {};
+  }
+});
+
+// Search notes by title and content
+ipcMain.handle('search-notes', async (event, folderPath: string, query: string) => {
+  try {
+    const results: Array<{
+      name: string;
+      path: string;
+      isFolder: boolean;
+      matchType: 'title' | 'content';
+      snippet?: string;
+    }> = [];
+    
+    const searchLower = query.toLowerCase();
+    
+    const scanDirectory = (dirPath: string) => {
+      const files = fs.readdirSync(dirPath);
+      
+      for (const file of files) {
+        const filePath = path.join(dirPath, file);
+        const stats = fs.statSync(filePath);
+        
+        if (stats.isDirectory()) {
+          // Check folder name
+          if (file.toLowerCase().includes(searchLower)) {
+            results.push({
+              name: file,
+              path: filePath,
+              isFolder: true,
+              matchType: 'title'
+            });
+          }
+          scanDirectory(filePath); // Recursive scan
+        } else if (file.endsWith('.md')) {
+          const noteName = file.replace('.md', '');
+          
+          // Check title match first
+          if (noteName.toLowerCase().includes(searchLower)) {
+            results.push({
+              name: noteName,
+              path: filePath,
+              isFolder: false,
+              matchType: 'title'
+            });
+          }
+          
+          // Check content match
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const contentLower = content.toLowerCase();
+          const matchIndex = contentLower.indexOf(searchLower);
+          
+          if (matchIndex !== -1) {
+            // Extract 50 characters before and after the match
+            const start = Math.max(0, matchIndex - 50);
+            const end = Math.min(content.length, matchIndex + query.length + 50);
+            let snippet = content.substring(start, end);
+            
+            // Add ellipsis if truncated
+            if (start > 0) snippet = '...' + snippet;
+            if (end < content.length) snippet = snippet + '...';
+            
+            // Clean up snippet (remove extra whitespace/newlines)
+            snippet = snippet.replace(/\s+/g, ' ').trim();
+            
+            // Only add if not already added by title match
+            const existingMatch = results.find(r => r.path === filePath);
+            if (!existingMatch) {
+              results.push({
+                name: noteName,
+                path: filePath,
+                isFolder: false,
+                matchType: 'content',
+                snippet
+              });
+            } else if (existingMatch.matchType === 'title') {
+              // Add snippet to existing title match
+              existingMatch.snippet = snippet;
+            }
+          }
+        }
+      }
+    };
+    
+    scanDirectory(folderPath);
+    
+    // Sort: title matches first, then content matches
+    results.sort((a, b) => {
+      if (a.matchType === 'title' && b.matchType === 'content') return -1;
+      if (a.matchType === 'content' && b.matchType === 'title') return 1;
+      return 0;
+    });
+    
+    return results;
+  } catch (error) {
+    console.error('Error searching notes:', error);
+    return [];
   }
 });
 
@@ -119,12 +280,63 @@ ipcMain.handle('create-note', async (event, folderPath: string, title: string) =
   }
 });
 
+// Create a new folder
+ipcMain.handle('create-folder', async (event, parentPath: string, folderName: string) => {
+  try {
+    // Sanitize folder name
+    const sanitizedName = folderName.replace(/[^a-zA-Z0-9 ]/g, '_');
+    const folderPath = path.join(parentPath, sanitizedName);
+    
+    // Create folder if it doesn't exist
+    if (!fs.existsSync(folderPath)) {
+      fs.mkdirSync(folderPath, { recursive: true });
+    }
+    
+    return folderPath;
+  } catch (error) {
+    console.error('Error creating folder:', error);
+    throw error;
+  }
+});
+
 // Delete a note
 ipcMain.handle('delete-note', async (event, filePath: string) => {
   try {
     fs.unlinkSync(filePath);
   } catch (error) {
     console.error('Error deleting note:', error);
+    throw error;
+  }
+});
+
+// Delete a folder and all its contents
+ipcMain.handle('delete-folder', async (event, folderPath: string) => {
+  try {
+    // Recursively delete folder and all contents
+    fs.rmSync(folderPath, { recursive: true, force: true });
+  } catch (error) {
+    console.error('Error deleting folder:', error);
+    throw error;
+  }
+});
+
+// Move a note to a folder
+ipcMain.handle('move-note', async (event, notePath: string, targetFolderPath: string) => {
+  try {
+    const fileName = path.basename(notePath);
+    const newPath = path.join(targetFolderPath, fileName);
+    
+    // Check if file already exists in target folder
+    if (fs.existsSync(newPath)) {
+      throw new Error('A file with this name already exists in the target folder');
+    }
+    
+    // Move the file
+    fs.renameSync(notePath, newPath);
+    
+    return newPath;
+  } catch (error) {
+    console.error('Error moving note:', error);
     throw error;
   }
 });

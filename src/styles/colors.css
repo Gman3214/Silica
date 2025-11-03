@@ -8,6 +8,7 @@
 :root {
   /* Light Mode Colors - Silica Light Theme */
   --color-primary-bg: #FFFFFF;           /* Silica White - Main background */
+  --color-primary-bg-rgb: 255, 255, 255; /* RGB for transparency */
   --color-secondary-bg: #F5F5F5;         /* Cloud Grey - Cards, sidebars */
   --color-tertiary-bg: #EEEEEE;          /* Slightly darker grey for inputs */
   
@@ -38,6 +39,7 @@
 [data-theme="dark"] {
   /* Dark Mode Colors - Silica Dark Theme */
   --color-primary-bg: #1A1A1A;           /* Silica Deep - Main background */
+  --color-primary-bg-rgb: 26, 26, 26;    /* RGB for transparency */
   --color-secondary-bg: #2C2C2C;         /* Obsidian - Cards, sidebars */
   --color-tertiary-bg: #333333;          /* Slightly lighter for inputs */
   
@@ -75,6 +77,7 @@
 :root, [data-theme="dark"] {
   /* Backgrounds */
   --bg-primary: var(--color-primary-bg);
+  --bg-primary-rgb: var(--color-primary-bg-rgb);
   --bg-secondary: var(--color-secondary-bg);
   --bg-tertiary: var(--color-tertiary-bg);
   --bg-hover: var(--color-accent-light);
