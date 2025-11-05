@@ -1,12 +1,30 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { EditorView, Decoration, DecorationSet, ViewPlugin, ViewUpdate, keymap, WidgetType } from '@codemirror/view';
-import { syntaxTree } from '@codemirror/language';
-import { RangeSetBuilder, EditorState } from '@codemirror/state';
+import { syntaxTree, syntaxHighlighting } from '@codemirror/language';
+import { RangeSetBuilder, EditorState, StateField, StateEffect } from '@codemirror/state';
+import { tags as t } from '@lezer/highlight';
 import Autocomplete, { AutocompleteItem } from './Autocomplete';
 import TextFormatToolbar from './TextFormatToolbar';
 import './MarkdownEditor.css';
+import { tablePlugin } from './plugins/tablePlugin';
+import { checkboxPlugin } from './plugins/checkboxPlugin';
+import { bulletListPlugin } from './plugins/bulletListPlugin';
+import { codeBlockPlugin } from './plugins/codeBlockPlugin';
+import { blockquotePlugin } from './plugins/blockquotePlugin';
+
+// Debounce utility for heavy operations
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout | null = null;
+  return function(...args: Parameters<T>) {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
 
 interface Note {
   name: string;
@@ -24,8 +42,8 @@ interface MarkdownEditorProps {
   workspaceTags?: string[];
 }
 
-// Create a view plugin to add line-level decorations for headers
-const headerLinePlugin = ViewPlugin.fromClass(class {
+// Combined plugin for headers and markdown hiding - more efficient with single syntax tree traversal
+const combinedMarkdownPlugin = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
 
   constructor(view: any) {
@@ -33,72 +51,30 @@ const headerLinePlugin = ViewPlugin.fromClass(class {
   }
 
   update(update: ViewUpdate) {
+    // Only update on actual document or viewport changes, skip selection-only changes for headers
     if (update.docChanged || update.viewportChanged) {
       this.decorations = this.buildDecorations(update.view);
-    }
-  }
-
-  buildDecorations(view: any) {
-    const builder = new RangeSetBuilder<Decoration>();
-    
-    for (let { from, to } of view.visibleRanges) {
-      syntaxTree(view.state).iterate({
-        from,
-        to,
-        enter: (node: any) => {
-          // Check if this is a header node
-          if (node.name === 'ATXHeading1' || node.name === 'ATXHeading2' || 
-              node.name === 'ATXHeading3' || node.name === 'ATXHeading4' || 
-              node.name === 'ATXHeading5' || node.name === 'ATXHeading6') {
-            
-            const line = view.state.doc.lineAt(node.from);
-            const level = node.name.charAt(node.name.length - 1);
-            
-            // Add a line decoration with the appropriate header class
-            builder.add(
-              line.from,
-              line.from,
-              Decoration.line({ class: `header-line-${level}` })
-            );
-          }
-        },
-      });
-    }
-    
-    return builder.finish();
-  }
-}, {
-  decorations: (v) => v.decorations,
-});
-
-// Plugin to hide markdown formatting when cursor is not touching the formatted text
-const hideMarkdownPlugin = ViewPlugin.fromClass(class {
-  decorations: DecorationSet;
-
-  constructor(view: any) {
-    this.decorations = this.buildDecorations(view);
-  }
-
-  update(update: ViewUpdate) {
-    if (update.docChanged || update.viewportChanged || update.selectionSet) {
+    } else if (update.selectionSet) {
+      // For selection changes, only rebuild (affects hide/show of markdown syntax)
       this.decorations = this.buildDecorations(update.view);
     }
   }
 
   isCursorNear(view: any, nodeFrom: number, nodeTo: number): boolean {
     const cursorPos = view.state.selection.main.head;
-    // Check if cursor is within or immediately adjacent to the formatting mark
     return cursorPos >= nodeFrom - 1 && cursorPos <= nodeTo + 1;
   }
 
   findFormattedRange(view: any, node: any): { from: number; to: number } | null {
-    // For header marks, find the entire header line
     if (node.name === 'HeaderMark') {
       const line = view.state.doc.lineAt(node.from);
       return { from: node.from, to: line.to };
     }
     
-    // For emphasis marks, find the parent emphasis node
+    if (node.name === 'HorizontalRule') {
+      return { from: node.from, to: node.to };
+    }
+    
     if (node.name === 'EmphasisMark') {
       let parent = node.node.parent;
       while (parent) {
@@ -109,7 +85,6 @@ const hideMarkdownPlugin = ViewPlugin.fromClass(class {
       }
     }
     
-    // For code marks, find the parent inline code node
     if (node.name === 'CodeMark') {
       let parent = node.node.parent;
       while (parent) {
@@ -120,7 +95,6 @@ const hideMarkdownPlugin = ViewPlugin.fromClass(class {
       }
     }
     
-    // For links, find the parent link node
     if (node.name === 'LinkMark' || node.name === 'URL') {
       let parent = node.node.parent;
       while (parent) {
@@ -137,93 +111,79 @@ const hideMarkdownPlugin = ViewPlugin.fromClass(class {
   buildDecorations(view: any) {
     const builder = new RangeSetBuilder<Decoration>();
     const cursorPos = view.state.selection.main.head;
-    const text = view.state.doc.toString();
-    
-    // Collect all decorations first, then add them sorted
     const decorations: Array<{ from: number; to: number; decoration: Decoration }> = [];
     
-    // Find all tags (#tagname - # without space after it, supports dots for hierarchy)
-    const tagRegex = /#([a-zA-Z0-9_.-]+)(?=\s|$)/g;
-    let tagMatch;
-    
-    while ((tagMatch = tagRegex.exec(text)) !== null) {
-      const tagFrom = tagMatch.index;
-      const tagTo = tagMatch.index + tagMatch[0].length;
-      
-      // Check if this is NOT a header (header would have space after #)
-      const charBefore = tagFrom > 0 ? text[tagFrom - 1] : '\n';
-      const isAtLineStart = charBefore === '\n' || tagFrom === 0;
-      
-      // If it's at line start, check if there's a space after the #
-      if (isAtLineStart) {
-        const charAfterHash = text[tagFrom + 1];
-        if (charAfterHash && charAfterHash !== ' ') {
-          // This is a tag, not a header
-          decorations.push({
-            from: tagFrom,
-            to: tagTo,
-            decoration: Decoration.mark({ class: 'cm-tag' })
-          });
-          continue;
-        }
-      } else {
-        // Not at line start, so it's definitely a tag
-        decorations.push({
-          from: tagFrom,
-          to: tagTo,
-          decoration: Decoration.mark({ class: 'cm-tag' })
-        });
-      }
-    }
-    
-    // Find all [[note]] links and check if cursor is in any of them
-    const linkRegex = /\[\[([^\]]+)\]\]/g;
-    let match;
-    
-    while ((match = linkRegex.exec(text)) !== null) {
-      const linkFrom = match.index;
-      const linkTo = match.index + match[0].length;
-      const cursorInLink = cursorPos >= linkFrom && cursorPos <= linkTo;
-      
-      // Hide the brackets if cursor is NOT in this link
-      if (!cursorInLink) {
-        // Hide opening [[
-        decorations.push({
-          from: linkFrom,
-          to: linkFrom + 2,
-          decoration: Decoration.replace({})
-        });
-        // Hide closing ]]
-        decorations.push({
-          from: linkTo - 2,
-          to: linkTo,
-          decoration: Decoration.replace({})
-        });
-      }
-    }
-    
-    // Process syntax tree for other markdown formatting
+    // Single syntax tree traversal for both headers and markdown hiding
     for (let { from, to } of view.visibleRanges) {
       syntaxTree(view.state).iterate({
         from,
         to,
         enter: (node: any) => {
-          // Find the range of the formatted text (including marks)
+          // Handle header line decorations
+          if (node.name === 'ATXHeading1' || node.name === 'ATXHeading2' || 
+              node.name === 'ATXHeading3' || node.name === 'ATXHeading4' || 
+              node.name === 'ATXHeading5' || node.name === 'ATXHeading6') {
+            
+            const line = view.state.doc.lineAt(node.from);
+            const level = node.name.charAt(node.name.length - 1);
+            
+            decorations.push({
+              from: line.from,
+              to: line.from,
+              decoration: Decoration.line({ class: `header-line-${level}` })
+            });
+          }
+          
+          // Handle horizontal rules (---, ***, ___)
+          if (node.name === 'HorizontalRule') {
+            const line = view.state.doc.lineAt(node.from);
+            const cursorOnLine = cursorPos >= line.from && cursorPos <= line.to;
+            
+            if (cursorOnLine) {
+              // When cursor is on the line, show the text with dimmed styling
+              decorations.push({
+                from: node.from,
+                to: node.to,
+                decoration: Decoration.mark({ 
+                  class: 'hr-text-editing',
+                  attributes: {
+                    style: 'color: var(--text-primary) !important; opacity: 0.7; font-style: italic;'
+                  }
+                })
+              });
+            } else {
+              // Replace the --- with a visual horizontal line
+              decorations.push({
+                from: node.from,
+                to: node.to,
+                decoration: Decoration.replace({
+                  widget: new class extends WidgetType {
+                    toDOM() {
+                      const hr = document.createElement('div');
+                      hr.className = 'cm-hr';
+                      hr.style.cssText = 'display: block; width: 100%; height: 1px; background: linear-gradient(to right, transparent, var(--border) 10%, var(--border) 90%, transparent); margin: 0; padding: 0; border: none; opacity: 0.6; line-height: 1px;';
+                      return hr;
+                    }
+                    
+                    eq(other: any) { return true; }
+                    
+                    ignoreEvent() { return false; }
+                  }()
+                })
+              });
+            }
+          }
+          
+          // Handle markdown syntax hiding
           const formattedRange = this.findFormattedRange(view, node);
           
           if (formattedRange) {
-            // Check if cursor is anywhere within the formatted text range
             const cursorInRange = cursorPos >= formattedRange.from && cursorPos <= formattedRange.to;
             
-            // Only hide formatting if cursor is NOT in the formatted range
             if (!cursorInRange) {
-              // Hide header marks (# ## ###) and the space after them
               if (node.name === 'HeaderMark') {
                 const docLength = view.state.doc.length;
-                // Check if there's a space after the header mark
                 const charAfterMark = node.to < docLength ? view.state.doc.sliceString(node.to, node.to + 1) : '';
-                
-                // If there's a space after the header mark, include it in the hidden range
                 const endPos = charAfterMark === ' ' ? Math.min(node.to + 1, docLength) : node.to;
                 
                 decorations.push({
@@ -231,17 +191,13 @@ const hideMarkdownPlugin = ViewPlugin.fromClass(class {
                   to: endPos,
                   decoration: Decoration.replace({})
                 });
-              }
-              // Hide emphasis marks (** __ * _)
-              else if (node.name === 'EmphasisMark') {
+              } else if (node.name === 'EmphasisMark') {
                 decorations.push({
                   from: node.from,
                   to: node.to,
                   decoration: Decoration.replace({})
                 });
-              }
-              // Hide link marks ([ ] ( ))
-              else if (node.name === 'LinkMark' || node.name === 'URL') {
+              } else if (node.name === 'LinkMark' || node.name === 'URL') {
                 const text = view.state.doc.sliceString(node.from, node.to);
                 if (text === '[' || text === ']' || text === '(' || text === ')') {
                   decorations.push({
@@ -250,9 +206,7 @@ const hideMarkdownPlugin = ViewPlugin.fromClass(class {
                     decoration: Decoration.replace({})
                   });
                 }
-              }
-              // Hide code marks (`)
-              else if (node.name === 'CodeMark') {
+              } else if (node.name === 'CodeMark') {
                 decorations.push({
                   from: node.from,
                   to: node.to,
@@ -265,7 +219,7 @@ const hideMarkdownPlugin = ViewPlugin.fromClass(class {
       });
     }
     
-    // Sort decorations by position and add to builder
+    // Sort and add all decorations
     decorations.sort((a, b) => a.from - b.from);
     for (const { from, to, decoration } of decorations) {
       builder.add(from, to, decoration);
@@ -277,138 +231,112 @@ const hideMarkdownPlugin = ViewPlugin.fromClass(class {
   decorations: (v) => v.decorations,
 });
 
-// Plugin to style [[note]] links
-const noteLinkPlugin = ViewPlugin.fromClass(class {
+// Optimized plugin for regex-based decorations (tags and note links) with debouncing
+const regexDecorationsPlugin = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
+  pendingUpdate: any = null;
+  debounceTimeout: NodeJS.Timeout | null = null;
 
   constructor(view: any) {
     this.decorations = this.buildDecorations(view);
   }
 
   update(update: ViewUpdate) {
-    if (update.docChanged || update.viewportChanged) {
+    // For viewport changes, update immediately
+    if (update.viewportChanged) {
       this.decorations = this.buildDecorations(update.view);
+      return;
     }
-  }
-
-  buildDecorations(view: any) {
-    const builder = new RangeSetBuilder<Decoration>();
-    const text = view.state.doc.toString();
     
-    // Find all [[note]] patterns
-    const linkRegex = /\[\[([^\]]+)\]\]/g;
-    let match;
-    
-    while ((match = linkRegex.exec(text)) !== null) {
-      const from = match.index;
-      const to = match.index + match[0].length;
+    // For document or selection changes, debounce but keep old decorations
+    if (update.docChanged || update.selectionSet) {
+      // Clear existing timeout
+      if (this.debounceTimeout) {
+        clearTimeout(this.debounceTimeout);
+      }
       
-      // Add decoration to make it look like a link
-      builder.add(
-        from,
-        to,
-        Decoration.mark({
-          class: 'note-link',
-          attributes: {
-            'data-note-name': match[1]
-          }
-        })
-      );
+      // Set new timeout for debounced update (200ms for typing comfort)
+      this.debounceTimeout = setTimeout(() => {
+        this.decorations = this.buildDecorations(update.view);
+        update.view.dispatch({});
+      }, 200);
     }
-    
-    return builder.finish();
-  }
-}, {
-  decorations: (v) => v.decorations,
-});
-
-// Plugin to style custom markdown (highlight and underline)
-const customMarkdownPlugin = ViewPlugin.fromClass(class {
-  decorations: DecorationSet;
-
-  constructor(view: any) {
-    this.decorations = this.buildDecorations(view);
   }
 
-  update(update: ViewUpdate) {
-    if (update.docChanged || update.viewportChanged || update.selectionSet) {
-      this.decorations = this.buildDecorations(update.view);
+  destroy() {
+    if (this.debounceTimeout) {
+      clearTimeout(this.debounceTimeout);
     }
   }
 
   buildDecorations(view: any) {
     const builder = new RangeSetBuilder<Decoration>();
-    const text = view.state.doc.toString();
     const cursorPos = view.state.selection.main.head;
-    
-    // Collect all decorations first, then add them sorted
     const decorations: Array<{ from: number; to: number; decoration: Decoration }> = [];
     
-    // Find all ==highlight== patterns
-    const highlightRegex = /==([^=]+)==/g;
-    let match;
-    
-    while ((match = highlightRegex.exec(text)) !== null) {
-      const matchFrom = match.index;
-      const matchTo = match.index + match[0].length;
-      const cursorInMatch = cursorPos >= matchFrom && cursorPos <= matchTo;
+    // Only process visible ranges for better performance
+    for (let { from, to } of view.visibleRanges) {
+      const text = view.state.doc.sliceString(from, to);
+      const offset = from;
       
-      if (!cursorInMatch) {
-        // Hide the == markers
-        decorations.push({
-          from: matchFrom,
-          to: matchFrom + 2,
-          decoration: Decoration.replace({})
-        });
-        decorations.push({
-          from: matchTo - 2,
-          to: matchTo,
-          decoration: Decoration.replace({})
-        });
+      // Find all tags (#tagname - # without space after it, supports dots for hierarchy)
+      const tagRegex = /#([a-zA-Z0-9_.-]+)(?=\s|$)/g;
+      let tagMatch;
+      
+      while ((tagMatch = tagRegex.exec(text)) !== null) {
+        const tagFrom = offset + tagMatch.index;
+        const tagTo = offset + tagMatch.index + tagMatch[0].length;
+        
+        // Check if this is NOT a header (header would have space after #)
+        const charBefore = tagMatch.index > 0 ? text[tagMatch.index - 1] : '\n';
+        const isAtLineStart = charBefore === '\n' || tagMatch.index === 0;
+        
+        // If it's at line start, check if there's a space after the #
+        if (isAtLineStart) {
+          const charAfterHash = text[tagMatch.index + 1];
+          if (charAfterHash && charAfterHash !== ' ') {
+            // This is a tag, not a header
+            decorations.push({
+              from: tagFrom,
+              to: tagTo,
+              decoration: Decoration.mark({ class: 'cm-tag' })
+            });
+          }
+        } else {
+          // Not at line start, so it's definitely a tag
+          decorations.push({
+            from: tagFrom,
+            to: tagTo,
+            decoration: Decoration.mark({ class: 'cm-tag' })
+          });
+        }
       }
       
-      // Style the entire match (including markers when visible)
-      decorations.push({
-        from: matchFrom,
-        to: matchTo,
-        decoration: Decoration.mark({
-          class: 'custom-highlight'
-        })
-      });
-    }
-    
-    // Find all <u>underline</u> patterns
-    const underlineRegex = /<u>([^<]+)<\/u>/g;
-    
-    while ((match = underlineRegex.exec(text)) !== null) {
-      const matchFrom = match.index;
-      const matchTo = match.index + match[0].length;
-      const contentFrom = matchFrom + 3; // After <u>
-      const contentTo = matchTo - 4; // Before </u>
-      const cursorInMatch = cursorPos >= matchFrom && cursorPos <= matchTo;
+      // Find all [[note]] links and check if cursor is in any of them
+      const linkRegex = /\[\[([^\]]+)\]\]/g;
+      let match;
       
-      if (!cursorInMatch) {
-        // Hide the <u> and </u> tags
-        decorations.push({
-          from: matchFrom,
-          to: contentFrom,
-          decoration: Decoration.replace({})
-        });
-        decorations.push({
-          from: contentTo,
-          to: matchTo,
-          decoration: Decoration.replace({})
-        });
+      while ((match = linkRegex.exec(text)) !== null) {
+        const linkFrom = offset + match.index;
+        const linkTo = offset + match.index + match[0].length;
+        const cursorInLink = cursorPos >= linkFrom && cursorPos <= linkTo;
+        
+        // Hide the brackets if cursor is NOT in this link
+        if (!cursorInLink) {
+          // Hide opening [[
+          decorations.push({
+            from: linkFrom,
+            to: linkFrom + 2,
+            decoration: Decoration.replace({})
+          });
+          // Hide closing ]]
+          decorations.push({
+            from: linkTo - 2,
+            to: linkTo,
+            decoration: Decoration.replace({})
+          });
+        }
       }
-      
-      // Style the content with underline
-      decorations.push({
-        from: contentFrom,
-        to: contentTo,
-        decoration: Decoration.mark({
-          class: 'custom-underline'
-        })
-      });
     }
     
     // Sort decorations by position and add to builder
@@ -423,8 +351,8 @@ const customMarkdownPlugin = ViewPlugin.fromClass(class {
   decorations: (v) => v.decorations,
 });
 
-// Plugin to add interactive checkboxes for task lists
-const checkboxPlugin = (onChangeCallback: (newValue: string) => void) => ViewPlugin.fromClass(class {
+// Optimized plugin for note link styling (immediate, lightweight)
+const noteLinkStylingPlugin = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
 
   constructor(view: any) {
@@ -432,6 +360,7 @@ const checkboxPlugin = (onChangeCallback: (newValue: string) => void) => ViewPlu
   }
 
   update(update: ViewUpdate) {
+    // Only update on doc or viewport changes
     if (update.docChanged || update.viewportChanged) {
       this.decorations = this.buildDecorations(update.view);
     }
@@ -439,66 +368,32 @@ const checkboxPlugin = (onChangeCallback: (newValue: string) => void) => ViewPlu
 
   buildDecorations(view: any) {
     const builder = new RangeSetBuilder<Decoration>();
-    const text = view.state.doc.toString();
     
-    // Match task list items: - [ ] or - [x]
-    const checkboxRegex = /^(\s*)-\s\[([ xX])\]\s/gm;
-    let match: RegExpExecArray | null;
-    
-    while ((match = checkboxRegex.exec(text)) !== null) {
-      const matchResult = match; // Capture for closure
-      const from = matchResult.index + matchResult[1].length; // After leading spaces
-      const checkboxEnd = from + matchResult[0].length - matchResult[1].length;
-      const isChecked = matchResult[2].toLowerCase() === 'x';
+    // Only process visible ranges
+    for (let { from, to } of view.visibleRanges) {
+      const text = view.state.doc.sliceString(from, to);
+      const offset = from;
       
-      // Create a widget for the checkbox
-      const checkbox = Decoration.widget({
-        widget: new class extends WidgetType {
-          toDOM() {
-            const span = document.createElement('span');
-            span.className = 'task-checkbox';
-            span.setAttribute('data-checked', isChecked.toString());
-            span.innerHTML = `
-              <svg width="16" height="16" viewBox="0 0 16 16" class="checkbox-icon">
-                <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                ${isChecked ? '<path d="M5 8L7 10L11 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' : ''}
-              </svg>
-            `;
-            
-            span.addEventListener('click', (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              
-              // Toggle the checkbox in the document
-              const newChecked = !isChecked;
-              const newCheckChar = newChecked ? 'x' : ' ';
-              const oldCheckbox = matchResult[0];
-              const newCheckbox = oldCheckbox.replace(/\[([ xX])\]/, `[${newCheckChar}]`);
-              
-              const transaction = view.state.update({
-                changes: {
-                  from: matchResult.index,
-                  to: matchResult.index + matchResult[0].length,
-                  insert: newCheckbox
-                }
-              });
-              
-              view.dispatch(transaction);
-              
-              // Call the onChange callback with the updated text
-              const newText = view.state.doc.toString();
-              onChangeCallback(newText);
-            });
-            
-            return span;
-          }
-        }(),
-        side: -1
-      });
+      // Find all [[note]] patterns
+      const linkRegex = /\[\[([^\]]+)\]\]/g;
+      let match;
       
-      // Hide the markdown syntax
-      builder.add(from, from, checkbox);
-      builder.add(from, checkboxEnd, Decoration.replace({}));
+      while ((match = linkRegex.exec(text)) !== null) {
+        const matchFrom = offset + match.index;
+        const matchTo = offset + match.index + match[0].length;
+        
+        // Add decoration to make it look like a link
+        builder.add(
+          matchFrom,
+          matchTo,
+          Decoration.mark({
+            class: 'note-link',
+            attributes: {
+              'data-note-name': match[1]
+            }
+          })
+        );
+      }
     }
     
     return builder.finish();
@@ -507,7 +402,132 @@ const checkboxPlugin = (onChangeCallback: (newValue: string) => void) => ViewPlu
   decorations: (v) => v.decorations,
 });
 
-const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ 
+// Optimized plugin for custom markdown (highlight and underline) with debouncing
+const customMarkdownPlugin = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+  debounceTimeout: NodeJS.Timeout | null = null;
+
+  constructor(view: any) {
+    this.decorations = this.buildDecorations(view);
+  }
+
+  update(update: ViewUpdate) {
+    // For viewport changes, update immediately
+    if (update.viewportChanged) {
+      this.decorations = this.buildDecorations(update.view);
+      return;
+    }
+    
+    // For document or selection changes, debounce
+    if (update.docChanged || update.selectionSet) {
+      if (this.debounceTimeout) {
+        clearTimeout(this.debounceTimeout);
+      }
+      
+      this.debounceTimeout = setTimeout(() => {
+        this.decorations = this.buildDecorations(update.view);
+        update.view.dispatch({});
+      }, 200);
+    }
+  }
+
+  destroy() {
+    if (this.debounceTimeout) {
+      clearTimeout(this.debounceTimeout);
+    }
+  }
+
+  buildDecorations(view: any) {
+    const builder = new RangeSetBuilder<Decoration>();
+    const cursorPos = view.state.selection.main.head;
+    const decorations: Array<{ from: number; to: number; decoration: Decoration }> = [];
+    
+    // Only process visible ranges
+    for (let { from, to } of view.visibleRanges) {
+      const text = view.state.doc.sliceString(from, to);
+      const offset = from;
+      
+      // Find all ==highlight== patterns
+      const highlightRegex = /==([^=]+)==/g;
+      let match;
+      
+      while ((match = highlightRegex.exec(text)) !== null) {
+        const matchFrom = offset + match.index;
+        const matchTo = offset + match.index + match[0].length;
+        const cursorInMatch = cursorPos >= matchFrom && cursorPos <= matchTo;
+        
+        if (!cursorInMatch) {
+          // Hide the == markers
+          decorations.push({
+            from: matchFrom,
+            to: matchFrom + 2,
+            decoration: Decoration.replace({})
+          });
+          decorations.push({
+            from: matchTo - 2,
+            to: matchTo,
+            decoration: Decoration.replace({})
+          });
+        }
+        
+        // Style the entire match (including markers when visible)
+        decorations.push({
+          from: matchFrom,
+          to: matchTo,
+          decoration: Decoration.mark({
+            class: 'custom-highlight'
+          })
+        });
+      }
+      
+      // Find all <u>underline</u> patterns
+      const underlineRegex = /<u>([^<]+)<\/u>/g;
+      
+      while ((match = underlineRegex.exec(text)) !== null) {
+        const matchFrom = offset + match.index;
+        const matchTo = offset + match.index + match[0].length;
+        const contentFrom = matchFrom + 3; // After <u>
+        const contentTo = matchTo - 4; // Before </u>
+        const cursorInMatch = cursorPos >= matchFrom && cursorPos <= matchTo;
+        
+        if (!cursorInMatch) {
+          // Hide the <u> and </u> tags
+          decorations.push({
+            from: matchFrom,
+            to: contentFrom,
+            decoration: Decoration.replace({})
+          });
+          decorations.push({
+            from: contentTo,
+            to: matchTo,
+            decoration: Decoration.replace({})
+          });
+        }
+        
+        // Style the content with underline
+        decorations.push({
+          from: contentFrom,
+          to: contentTo,
+          decoration: Decoration.mark({
+            class: 'custom-underline'
+          })
+        });
+      }
+    }
+    
+    // Sort decorations by position and add to builder
+    decorations.sort((a, b) => a.from - b.from);
+    for (const { from, to, decoration } of decorations) {
+      builder.add(from, to, decoration);
+    }
+    
+    return builder.finish();
+  }
+}, {
+  decorations: (v) => v.decorations,
+});
+
+const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({ 
   value, 
   onChange, 
   placeholder, 
@@ -516,7 +536,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   currentNotePath,
   onCreateNote,
   workspaceTags = []
-}) => {
+}, ref) => {
   const [autocomplete, setAutocomplete] = useState<{
     show: boolean;
     position: { x: number; y: number };
@@ -535,6 +555,15 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const editorRef = useRef<any>(null);
   const autocompleteRef = useRef(autocomplete);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Expose focus method to parent
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      if (editorRef.current) {
+        editorRef.current.focus();
+      }
+    }
+  }));
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -1182,11 +1211,44 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     '.cm-list': {
       color: 'var(--accent)',
     },
+    // Override horizontal rule colors in all states
+    '.cm-hr, .cm-hr-mark, .cm-horizontal-rule, .cm-horizontalRule': {
+      color: 'var(--text-primary) !important',
+    },
+    // Target the actual markdown horizontal rule token
+    '.cm-meta, .cm-meta.cm-hr': {
+      color: 'var(--text-primary) !important',
+    },
     '.cm-quote': {
       color: 'var(--text-secondary)',
       fontStyle: 'italic',
       borderLeft: '3px solid var(--border)',
       paddingLeft: '10px',
+    },
+    // Horizontal rule styling
+    '.cm-hr': {
+      display: 'block',
+      width: '100%',
+      height: '1px',
+      background: 'linear-gradient(to right, transparent, var(--border) 10%, var(--border) 90%, transparent)',
+      margin: '0',
+      padding: '0',
+      border: 'none',
+      opacity: 0.6,
+      lineHeight: '1px',
+    },
+    '.hr-text-editing': {
+      color: 'var(--text-primary) !important',
+      opacity: 0.7,
+      fontStyle: 'italic',
+    },
+    // Override nested spans inside horizontal rule editing
+    '.hr-text-editing span': {
+      color: 'var(--text-primary) !important',
+    },
+    // Override CodeMirror's default horizontal rule color
+    '.cm-hr-mark': {
+      color: 'var(--text-primary) !important',
     },
     // Custom markdown styles
     '.custom-highlight': {
@@ -1208,14 +1270,18 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           }
         }}
         value={value}
-        height="100%"
+        height="auto"
         extensions={[
           markdown({ base: markdownLanguage }), 
-          headerLinePlugin, 
-          hideMarkdownPlugin, 
-          noteLinkPlugin,
+          combinedMarkdownPlugin, 
+          regexDecorationsPlugin,
+          noteLinkStylingPlugin,
           customMarkdownPlugin,
+          tablePlugin,
           checkboxPlugin(onChange),
+          bulletListPlugin,
+          codeBlockPlugin,
+          blockquotePlugin,
           theme,
           EditorView.lineWrapping
         ]}
@@ -1260,6 +1326,6 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       )}
     </div>
   );
-};
+});
 
 export default MarkdownEditor;

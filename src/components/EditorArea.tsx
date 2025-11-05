@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import MarkdownEditor from './MarkdownEditor';
 import TabBar from './TabBar';
 import './EditorArea.css';
@@ -48,6 +48,8 @@ const EditorArea: React.FC<EditorAreaProps> = ({
   onTabClose,
   onTabsReorder,
 }) => {
+  const editorRef = useRef<any>(null);
+
   if (!selectedNote) {
     return (
       <div className="editor-container">
@@ -67,23 +69,29 @@ const EditorArea: React.FC<EditorAreaProps> = ({
         onTabClose={onTabClose}
         onTabsReorder={onTabsReorder}
       />
-      <div className="editor-header">
-        <input 
-          type="text" 
-          className="note-title-input" 
-          placeholder="Untitled Note" 
-          value={noteTitle}
-          onChange={(e) => onTitleChange(e.target.value)}
-          onBlur={onTitleBlur}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.currentTarget.blur();
-            }
-          }}
-        />
-      </div>
       <div className="editor">
+        <div className="editor-header">
+          <input 
+            type="text" 
+            className="note-title-input" 
+            placeholder="Untitled Note" 
+            value={noteTitle}
+            onChange={(e) => onTitleChange(e.target.value)}
+            onBlur={onTitleBlur}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.currentTarget.blur();
+                // Focus the markdown editor
+                if (editorRef.current) {
+                  editorRef.current.focus();
+                }
+              }
+            }}
+          />
+        </div>
         <MarkdownEditor
+          ref={editorRef}
           value={noteContent}
           onChange={onContentChange}
           placeholder="Start writing..."

@@ -34,6 +34,17 @@
   
   /* Shadow */
   --color-shadow: rgba(0, 0, 0, 0.1);
+  
+  /* Syntax Highlighting (Light Mode) */
+  --syntax-keyword: #0000FF;              /* Blue for keywords */
+  --syntax-string: #008000;               /* Green for strings */
+  --syntax-comment: #808080;              /* Grey for comments */
+  --syntax-number: #FF6600;               /* Orange for numbers */
+  --syntax-function: #795E26;             /* Brown for functions */
+  --syntax-variable: #001080;             /* Dark blue for variables */
+  --syntax-operator: #000000;             /* Black for operators */
+  --syntax-property: #001080;             /* Dark blue for properties */
+  --syntax-type: #267F99;                 /* Teal for types */
 }
 
 [data-theme="dark"] {
@@ -65,6 +76,17 @@
   
   /* Shadow */
   --color-shadow: rgba(0, 0, 0, 0.3);
+  
+  /* Syntax Highlighting (Dark Mode) */
+  --syntax-keyword: #C678DD;              /* Purple for keywords */
+  --syntax-string: #98C379;               /* Green for strings */
+  --syntax-comment: #5C6370;              /* Grey for comments */
+  --syntax-number: #D19A66;               /* Orange for numbers */
+  --syntax-function: #61AFEF;             /* Blue for functions */
+  --syntax-variable: #E06C75;             /* Red for variables */
+  --syntax-operator: #56B6C2;             /* Cyan for operators */
+  --syntax-property: #E5C07B;             /* Yellow for properties */
+  --syntax-type: #E5C07B;                 /* Yellow for types */
 }
 
 /* ===========================================
