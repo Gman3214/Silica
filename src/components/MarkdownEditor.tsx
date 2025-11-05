@@ -6,7 +6,7 @@ import { syntaxTree, syntaxHighlighting } from '@codemirror/language';
 import { RangeSetBuilder, EditorState, StateField, StateEffect } from '@codemirror/state';
 import { tags as t } from '@lezer/highlight';
 import Autocomplete, { AutocompleteItem } from './Autocomplete';
-import TextFormatToolbar from './TextFormatToolbar';
+import Floater from './Floater';
 import './MarkdownEditor.css';
 import { tablePlugin } from './plugins/tablePlugin';
 import { checkboxPlugin } from './plugins/checkboxPlugin';
@@ -550,6 +550,7 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
     show: boolean;
     position: { x: number; y: number };
     selection: { from: number; to: number };
+    selectedText: string;
   } | null>(null);
   
   const editorRef = useRef<any>(null);
@@ -709,10 +710,14 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
               y = 10;
             }
             
+            // Get the selected text
+            const selectedText = editorRef.current.state.doc.sliceString(selection.from, selection.to);
+            
             setFormatToolbar({
               show: true,
               position: { x, y },
-              selection: { from: selection.from, to: selection.to }
+              selection: { from: selection.from, to: selection.to },
+              selectedText
             });
           }
         } else {
@@ -725,7 +730,7 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       // Close toolbar if clicking outside of it
-      if (!target.closest('.text-format-toolbar')) {
+      if (!target.closest('.floater')) {
         setFormatToolbar(null);
       }
     };
@@ -981,6 +986,14 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
     }, 10);
 
     setFormatToolbar(null);
+  };
+
+  // Handle AI actions
+  const handleAIAction = (prompt: string, selectedText: string) => {
+    // TODO: Implement AI integration
+    console.log('AI Action:', { prompt, selectedText });
+    // For now, just log the action
+    // In the future, this will call an AI API
   };
 
   // Handle keyboard navigation in autocomplete
@@ -1317,10 +1330,12 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
         />
       )}
       {formatToolbar && formatToolbar.show && (
-        <TextFormatToolbar
+        <Floater
           x={formatToolbar.position.x}
           y={formatToolbar.position.y}
+          selectedText={formatToolbar.selectedText}
           onFormat={handleFormat}
+          onAIAction={handleAIAction}
           onClose={() => setFormatToolbar(null)}
         />
       )}
