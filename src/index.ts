@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, session } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import Store from 'electron-store';
@@ -29,6 +29,7 @@ const createWindow = (): void => {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       contextIsolation: true,
       nodeIntegration: false,
+      spellcheck: true, // Enable spell check
     },
   });
 
@@ -467,7 +468,24 @@ ipcMain.handle('set-setting', async (event, key: string, value: any) => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.on('ready', () => {
+  // Configure CSP to allow any outgoing connections
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self' 'unsafe-inline' data:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src *"
+        ]
+      }
+    });
+  });
+  
+  // Enable spell checker with English language
+  session.defaultSession.setSpellCheckerLanguages(['en-US']);
+  
+  createWindow();
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

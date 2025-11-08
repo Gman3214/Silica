@@ -13,6 +13,7 @@ import { checkboxPlugin } from './plugins/checkboxPlugin';
 import { bulletListPlugin } from './plugins/bulletListPlugin';
 import { codeBlockPlugin } from './plugins/codeBlockPlugin';
 import { blockquotePlugin } from './plugins/blockquotePlugin';
+import { predictTextPlugin, acceptPredictionKeymap } from './plugins/predictTextPlugin';
 
 // Debounce utility for heavy operations
 function debounce<T extends (...args: any[]) => any>(
@@ -673,6 +674,9 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
         const hasSelection = selection.from !== selection.to;
 
         if (hasSelection && e.button === 0) { // Left click
+          // Add class to trigger grow animation
+          wrapperRef.current.classList.add('selection-locked');
+          
           // Get the coordinates of the selection start and end
           const coordsStart = editorRef.current.coordsAtPos(selection.from);
           const coordsEnd = editorRef.current.coordsAtPos(selection.to);
@@ -680,12 +684,15 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
           if (coordsEnd) {
             // Approximate toolbar dimensions (will be adjusted by component)
             const toolbarHeight = 200; // Approximate height when expanded
-            const toolbarWidth = 240; // From CSS min-width
+            const toolbarWidth = 260; // From CSS min-width
             
             const viewportHeight = window.innerHeight;
             const viewportWidth = window.innerWidth;
             
-            let x = coordsEnd.left;
+            // Center the floater below the selection
+            const selectionWidth = coordsEnd.left - (coordsStart?.left || coordsEnd.left);
+            const selectionCenter = (coordsStart?.left || coordsEnd.left) + selectionWidth / 2;
+            let x = selectionCenter - toolbarWidth / 2;
             let y = coordsEnd.bottom + 5;
             
             // Check if toolbar would go off bottom of viewport
@@ -721,8 +728,11 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
             });
           }
         } else {
-          // No selection, close toolbar
+          // No selection, close toolbar and remove locked class
           setFormatToolbar(null);
+          if (wrapperRef.current) {
+            wrapperRef.current.classList.remove('selection-locked');
+          }
         }
       }, 10);
     };
@@ -732,19 +742,23 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
       // Close toolbar if clicking outside of it
       if (!target.closest('.floater')) {
         setFormatToolbar(null);
+        if (wrapperRef.current) {
+          wrapperRef.current.classList.remove('selection-locked');
+        }
       }
     };
 
     // Also close toolbar when selection changes (e.g., clicking somewhere)
     const handleSelectionChange = () => {
       setTimeout(() => {
-        if (!editorRef.current) return;
+        if (!editorRef.current || !wrapperRef.current) return;
         
         const selection = editorRef.current.state.selection.main;
         const hasSelection = selection.from !== selection.to;
         
         if (!hasSelection) {
           setFormatToolbar(null);
+          wrapperRef.current.classList.remove('selection-locked');
         }
       }, 10);
     };
@@ -995,6 +1009,7 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
     // For now, just log the action
     // In the future, this will call an AI API
   };
+
 
   // Handle keyboard navigation in autocomplete
   useEffect(() => {
@@ -1285,7 +1300,7 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
         value={value}
         height="auto"
         extensions={[
-          markdown({ base: markdownLanguage }), 
+          markdown({ base: markdownLanguage}), 
           combinedMarkdownPlugin, 
           regexDecorationsPlugin,
           noteLinkStylingPlugin,
@@ -1295,8 +1310,12 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
           bulletListPlugin,
           codeBlockPlugin,
           blockquotePlugin,
+          predictTextPlugin,
+          acceptPredictionKeymap,
           theme,
-          EditorView.lineWrapping
+          EditorView.lineWrapping,
+          // Enable native spell checking
+          EditorView.contentAttributes.of({ spellcheck: 'true' })
         ]}
         onChange={handleEditorChange}
         basicSetup={{

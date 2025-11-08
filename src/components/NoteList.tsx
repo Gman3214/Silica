@@ -70,11 +70,9 @@ const NoteList: React.FC<NoteListProps> = ({
     const hierarchy: { [key: string]: any } = {};
     const tagEntries = Object.entries(tags);
 
-    console.log('Building tag hierarchy from:', tagEntries);
 
     tagEntries.forEach(([tag, tagNotes]) => {
       const parts = tag.split('.');
-      console.log(`Processing tag: ${tag}, parts:`, parts);
       let current = hierarchy;
 
       parts.forEach((part, index) => {
@@ -92,7 +90,6 @@ const NoteList: React.FC<NoteListProps> = ({
       });
     });
 
-    console.log('Built hierarchy:', hierarchy);
     return hierarchy;
   };
 
