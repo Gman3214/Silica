@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, session } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, session, Menu, Event, ContextMenuParams } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import Store from 'electron-store';
@@ -38,6 +38,20 @@ const createWindow = (): void => {
 
   // Open the DevTools.
   mainWindow.webContents.openDevTools();
+
+  // Handle context menu for spell check
+  mainWindow.webContents.on('context-menu', (event: Event, params: ContextMenuParams) => {
+    event.preventDefault(); // Prevent native menu
+
+    const { x, y, misspelledWord, dictionarySuggestions } = params;
+
+    mainWindow.webContents.send('open-custom-context-menu', {
+      x,
+      y,
+      misspelledWord,
+      dictionarySuggestions,
+    });
+  });
 };
 
 // IPC Handlers
@@ -463,6 +477,11 @@ ipcMain.handle('get-setting', async (event, key: string) => {
 // Set setting
 ipcMain.handle('set-setting', async (event, key: string, value: any) => {
   store.set(key, value);
+});
+
+// Replace a misspelled word
+ipcMain.on('replace-misspelling', (event, suggestion: string) => {
+  event.sender.replaceMisspelling(suggestion);
 });
 
 // This method will be called when Electron has finished

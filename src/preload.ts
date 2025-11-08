@@ -26,6 +26,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Settings
   getSetting: (key: string) => ipcRenderer.invoke('get-setting', key),
   setSetting: (key: string, value: any) => ipcRenderer.invoke('set-setting', key, value),
+
+  // Context Menu
+  onOpenCustomContextMenu: (callback: (event: any, data: any) => void) => {
+    const listener = (event: any, data: any) => callback(event, data);
+    ipcRenderer.on('open-custom-context-menu', listener);
+    // Return a cleanup function
+    return () => {
+      ipcRenderer.removeListener('open-custom-context-menu', listener);
+    };
+  },
+  replaceMisspelling: (suggestion: string) => ipcRenderer.send('replace-misspelling', suggestion),
 });
 
 // Type definitions for TypeScript
@@ -53,6 +64,8 @@ export interface ElectronAPI {
   }>>;
   getSetting: (key: string) => Promise<any>;
   setSetting: (key: string, value: any) => Promise<void>;
+  onOpenCustomContextMenu: (callback: (event: any, data: any) => void) => () => void;
+  replaceMisspelling: (suggestion: string) => void;
 }
 
 declare global {

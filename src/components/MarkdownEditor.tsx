@@ -7,6 +7,7 @@ import { RangeSetBuilder, EditorState, StateField, StateEffect } from '@codemirr
 import { tags as t } from '@lezer/highlight';
 import Autocomplete, { AutocompleteItem } from './Autocomplete';
 import Floater from './Floater';
+import ContextMenu, { ContextMenuItem } from './ContextMenu';
 import './MarkdownEditor.css';
 import { tablePlugin } from './plugins/tablePlugin';
 import { checkboxPlugin } from './plugins/checkboxPlugin';
@@ -553,6 +554,12 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
     selection: { from: number; to: number };
     selectedText: string;
   } | null>(null);
+
+  const [contextMenu, setContextMenu] = useState<{
+    show: boolean;
+    position: { x: number; y: number };
+    items: ContextMenuItem[];
+  } | null>(null);
   
   const editorRef = useRef<any>(null);
   const autocompleteRef = useRef(autocomplete);
@@ -772,6 +779,33 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('selectionchange', handleSelectionChange);
     };
+  }, []);
+
+  // Handle custom context menu
+  useEffect(() => {
+    const cleanup = window.electronAPI.onOpenCustomContextMenu((event, data) => {
+      const { x, y, misspelledWord, dictionarySuggestions } = data;
+      
+      const items: ContextMenuItem[] = [];
+      
+      if (misspelledWord && dictionarySuggestions.length > 0) {
+        dictionarySuggestions.forEach((suggestion: string) => {
+          items.push({
+            label: `Correct to "${suggestion}"`,
+            action: () => window.electronAPI.replaceMisspelling(suggestion),
+          });
+        });
+        items.push({ type: 'divider' });
+      }
+      
+      items.push({ label: 'Cut', action: () => document.execCommand('cut') });
+      items.push({ label: 'Copy', action: () => document.execCommand('copy') });
+      items.push({ label: 'Paste', action: () => document.execCommand('paste') });
+      
+      setContextMenu({ show: true, position: { x, y }, items });
+    });
+    
+    return cleanup;
   }, []);
 
 
@@ -1326,7 +1360,7 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
           dropCursor: true,
           allowMultipleSelections: true,
           indentOnInput: true,
-          bracketMatching: false,
+bracketMatching: false,
           closeBrackets: false,
           autocompletion: false,
           rectangularSelection: true,
@@ -1356,6 +1390,14 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
           onFormat={handleFormat}
           onAIAction={handleAIAction}
           onClose={() => setFormatToolbar(null)}
+        />
+      )}
+      {contextMenu && contextMenu.show && (
+        <ContextMenu
+          x={contextMenu.position.x}
+          y={contextMenu.position.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
         />
       )}
     </div>
