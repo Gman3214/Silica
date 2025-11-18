@@ -11,9 +11,11 @@ interface FloaterProps {
   onAIReplace?: (transformedText: string) => void;
   onAIAddAfter?: (transformedText: string) => void;
   onClose: () => void;
+  autoFocusAI?: boolean;
+  onRefocusEditor?: () => void;
 }
 
-const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAction, onAIReplace, onAIAddAfter, onClose }) => {
+const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAction, onAIReplace, onAIAddAfter, onClose, autoFocusAI = false, onRefocusEditor }) => {
   const [aiPrompt, setAiPrompt] = useState('');
   const [showTextOptions, setShowTextOptions] = useState(false);
   const [showMoreAIOptions, setShowMoreAIOptions] = useState(false);
@@ -30,6 +32,15 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
   });
   
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Callback ref to auto-focus input when it mounts
+  const setInputRef = (element: HTMLInputElement | null) => {
+    inputRef.current = element;
+    if (element && autoFocusAI && activeTab === 'ai') {
+      // Focus immediately when element is available
+      element.focus();
+    }
+  };
 
   // Load AI commands from localStorage
   interface AICommand {
@@ -73,6 +84,52 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
     checkAI();
   }, []);
 
+  // Handle Escape key to close floater and Ctrl+1-5 for pinned commands
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onRefocusEditor?.();
+        onClose();
+        return;
+      }
+
+      // Handle preview shortcuts: Enter = Replace, Ctrl+Enter = Add After
+      if (aiPreview && activeTab === 'ai') {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl+Enter = Add After
+            handleAddAfterPreview();
+          } else {
+            // Enter = Replace
+            handleReplacePreview();
+          }
+          return;
+        }
+      }
+
+      // Check for Ctrl+1 through Ctrl+5 (or Cmd on Mac)
+      if ((e.ctrlKey || e.metaKey) && activeTab === 'ai' && !aiPreview) {
+        const num = parseInt(e.key);
+        if (num >= 1 && num <= 5 && pinnedCommands[num - 1]) {
+          e.preventDefault();
+          const command = pinnedCommands[num - 1];
+          setAiPrompt(command.prompt);
+          // Auto-submit the command
+          setTimeout(() => {
+            const form = document.querySelector('.floater-ai-form') as HTMLFormElement;
+            if (form) {
+              form.requestSubmit();
+            }
+          }, 0);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, onRefocusEditor, activeTab, pinnedCommands, aiPreview]);
+
   // Save active tab to localStorage whenever it changes
   const handleTabChange = (tab: 'ai' | 'format') => {
     setActiveTab(tab);
@@ -86,16 +143,25 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
 
   const handleAISubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!aiPrompt.trim() || !selectedText) return;
+    if (!aiPrompt.trim()) return;
 
     setIsAIProcessing(true);
     setAiError(null);
 
     try {
       // Build the AI request
-      const systemPrompt = `You are a helpful writing assistant. The user has selected some text and wants you to transform it based on their request. Only return the transformed text without any explanations, quotes, or additional commentary.`;
+      let systemPrompt: string;
+      let userPrompt: string;
       
-      const userPrompt = `${aiPrompt}\n\nText to transform:\n${selectedText}`;
+      if (selectedText.trim()) {
+        // Transforming existing text
+        systemPrompt = `You are a helpful writing assistant. The user has selected some text and wants you to transform it based on their request. Only return the transformed text without any explanations, quotes, or additional commentary.`;
+        userPrompt = `${aiPrompt}\n\nText to transform:\n${selectedText}`;
+      } else {
+        // Generating new text
+        systemPrompt = `You are a helpful writing assistant. The user wants you to generate text based on their request. Only return the generated text without any explanations, quotes, or additional commentary.`;
+        userPrompt = aiPrompt;
+      }
 
       // Call AI router
       const response = await aiRouter.chatCompletion({
@@ -238,7 +304,7 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
                       <line x1="18" y1="6" x2="6" y2="18"></line>
                       <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
-                    Discard
+                    <span className="floater-preview-btn-label">Discard</span>
                   </button>
                   <button className="floater-preview-btn floater-preview-replace" onClick={handleReplacePreview}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -246,14 +312,16 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
                       <polyline points="7 10 12 15 17 10"></polyline>
                       <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>
-                    Replace
+                    <span className="floater-preview-btn-label">Replace</span>
+                    <span className="floater-preview-shortcut">↵</span>
                   </button>
                   <button className="floater-preview-btn floater-preview-add" onClick={handleAddAfterPreview}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <line x1="12" y1="5" x2="12" y2="19"></line>
                       <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
-                    Add After
+                    <span className="floater-preview-btn-label">Add After</span>
+                    <span className="floater-preview-shortcut">Ctrl+↵</span>
                   </button>
                 </div>
               </>
@@ -263,7 +331,7 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
           <>
         <form onSubmit={handleAISubmit} className="floater-ai-form">
           <input
-            ref={inputRef}
+            ref={setInputRef}
             type="text"
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
@@ -278,7 +346,7 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
           </button>
         </form>
         <div className="floater-ai-suggestions">
-          {pinnedCommands.map((command) => (
+          {pinnedCommands.map((command, index) => (
             <button 
               key={command.id}
               className="floater-suggestion-btn"
@@ -287,7 +355,8 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
                 inputRef.current?.focus();
               }}
             >
-              {command.label}
+              <span className="floater-suggestion-label">{command.label}</span>
+              <span className="floater-suggestion-shortcut">{index + 1}</span>
             </button>
           ))}
         </div>

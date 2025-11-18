@@ -55,9 +55,9 @@ const combinedMarkdownPlugin = ViewPlugin.fromClass(class {
   }
 
   update(update: ViewUpdate) {
-    // Only update on document changes or viewport changes
-    // Skip selection-only changes to avoid rebuilding on every cursor movement
-    if (update.docChanged || update.viewportChanged) {
+    // Update on document changes, viewport changes, or cursor movement
+    // We need selectionSet for showing/hiding markdown syntax based on cursor position
+    if (update.docChanged || update.viewportChanged || update.selectionSet) {
       this.decorations = this.buildDecorations(update.view);
     }
   }
@@ -138,23 +138,11 @@ const combinedMarkdownPlugin = ViewPlugin.fromClass(class {
           
           // Handle horizontal rules (---, ***, ___)
           if (node.name === 'HorizontalRule') {
-            const line = view.state.doc.lineAt(node.from);
-            const cursorOnLine = cursorPos >= line.from && cursorPos <= line.to;
+            // Check if cursor is within the horizontal rule range (not just on the line)
+            const cursorInHR = cursorPos >= node.from && cursorPos <= node.to;
             
-            if (cursorOnLine) {
-              // When cursor is on the line, show the text with dimmed styling
-              decorations.push({
-                from: node.from,
-                to: node.to,
-                decoration: Decoration.mark({ 
-                  class: 'hr-text-editing',
-                  attributes: {
-                    style: 'color: var(--text-primary) !important; opacity: 0.7; font-style: italic;'
-                  }
-                })
-              });
-            } else {
-              // Replace the --- with a visual horizontal line
+            if (!cursorInHR) {
+              // Replace the --- with a visual horizontal line only when cursor is NOT in the range
               decorations.push({
                 from: node.from,
                 to: node.to,
@@ -174,6 +162,8 @@ const combinedMarkdownPlugin = ViewPlugin.fromClass(class {
                 })
               });
             }
+            // When cursor is in the range, show the actual text (no decoration needed)
+            return; // Skip further processing for horizontal rules
           }
           
           // Handle markdown syntax hiding
@@ -553,6 +543,7 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
     position: { x: number; y: number };
     selection: { from: number; to: number };
     selectedText: string;
+    autoFocusAI?: boolean;
   } | null>(null);
 
   const [contextMenu, setContextMenu] = useState<{
@@ -564,6 +555,7 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
   const editorRef = useRef<any>(null);
   const autocompleteRef = useRef(autocomplete);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const isOpeningFloaterRef = useRef(false); // Track when we're opening floater with empty selection
 
   // Expose focus method to parent
   useImperativeHandle(ref, () => ({
@@ -667,6 +659,141 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
 
   // Handle text selection and show format toolbar on left click
   useEffect(() => {
+    // Function to show floater (used by both mouse and keyboard)
+    const showFloater = () => {
+      if (!editorRef.current || !wrapperRef.current) return false;
+
+      const selection = editorRef.current.state.selection.main;
+      let hasSelection = selection.from !== selection.to;
+      let selectedText = '';
+      let selectionRange = { from: selection.from, to: selection.to };
+
+      // If no selection, select the current word or line
+      if (!hasSelection) {
+        const pos = selection.head;
+        const line = editorRef.current.state.doc.lineAt(pos);
+        const lineText = line.text;
+        
+        // Try to find word boundaries
+        let wordStart = pos - line.from;
+        let wordEnd = pos - line.from;
+        
+        // Find word start
+        while (wordStart > 0 && /\S/.test(lineText[wordStart - 1])) {
+          wordStart--;
+        }
+        
+        // Find word end
+        while (wordEnd < lineText.length && /\S/.test(lineText[wordEnd])) {
+          wordEnd++;
+        }
+        
+        const absoluteStart = line.from + wordStart;
+        const absoluteEnd = line.from + wordEnd;
+        
+        // If we found a word, select it
+        if (absoluteEnd > absoluteStart) {
+          selectionRange = { from: absoluteStart, to: absoluteEnd };
+          selectedText = editorRef.current.state.doc.sliceString(absoluteStart, absoluteEnd);
+          hasSelection = true;
+          
+          // Update the editor selection
+          editorRef.current.dispatch({
+            selection: { anchor: absoluteStart, head: absoluteEnd }
+          });
+        } else if (lineText.trim()) {
+          // No word found but line has text, select the whole line
+          selectionRange = { from: line.from, to: line.to };
+          selectedText = lineText;
+          hasSelection = true;
+          
+          // Update the editor selection
+          editorRef.current.dispatch({
+            selection: { anchor: line.from, head: line.to }
+          });
+        } else {
+          // Empty line - still show floater but with empty selection
+          // Use cursor position as both from and to
+          selectionRange = { from: pos, to: pos };
+          selectedText = ''; // Empty text for AI to work with
+          hasSelection = true; // Still show the floater
+        }
+      } else {
+        selectedText = editorRef.current.state.doc.sliceString(selection.from, selection.to);
+      }
+
+      if (hasSelection) {
+        wrapperRef.current.classList.add('selection-locked');
+        
+        const toolbarHeight = 200;
+        const toolbarWidth = 260;
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        
+        // Get cursor position and position floater next to it
+        const cursorPos = editorRef.current.state.selection.main.head;
+        const coords = editorRef.current.coordsAtPos(cursorPos);
+        
+        let x: number;
+        let y: number;
+        
+        if (coords) {
+          // Position floater to the right of cursor
+          x = coords.left + 10;
+          y = coords.top;
+          
+          // Check if toolbar would go off right edge of viewport
+          if (x + toolbarWidth > viewportWidth) {
+            // Position to the left of cursor instead
+            x = coords.left - toolbarWidth - 10;
+          }
+          
+          // Check if toolbar would go off bottom of viewport
+          if (y + toolbarHeight > viewportHeight) {
+            y = viewportHeight - toolbarHeight - 10;
+          }
+          
+          // Make sure it doesn't go off left edge
+          if (x < 10) {
+            x = 10;
+          }
+          
+          // Make sure it doesn't go off top edge
+          if (y < 10) {
+            y = 10;
+          }
+        } else {
+          // Fallback to center if coords unavailable
+          x = (viewportWidth - toolbarWidth) / 2;
+          y = (viewportHeight - toolbarHeight) / 2;
+        }
+        
+        setFormatToolbar({
+          show: true,
+          position: { x, y },
+          selection: selectionRange,
+          selectedText,
+          autoFocusAI: true
+        });
+        
+        // Set flag to prevent handleSelectionChange from closing the floater immediately
+        if (selectedText === '') {
+          isOpeningFloaterRef.current = true;
+          setTimeout(() => {
+            isOpeningFloaterRef.current = false;
+          }, 100); // Clear flag after 100ms
+        }
+        
+        // Blur the editor to prevent typing in it
+        if (editorRef.current) {
+          editorRef.current.contentDOM.blur();
+        }
+        
+        return true;
+      }
+      return false;
+    };
+
     const handleMouseUp = (e: MouseEvent) => {
       // Small delay to let CodeMirror update the selection
       setTimeout(() => {
@@ -840,31 +967,29 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
       }, 10);
     };
 
-    // Also close toolbar when selection changes (e.g., clicking somewhere)
-    const handleSelectionChange = () => {
-      setTimeout(() => {
-        if (!editorRef.current || !wrapperRef.current) return;
-        
-        const selection = editorRef.current.state.selection.main;
-        const hasSelection = selection.from !== selection.to;
-        
-        if (!hasSelection) {
-          setFormatToolbar(null);
-          wrapperRef.current.classList.remove('selection-locked');
-        }
-      }, 10);
+    // Open floater with Ctrl+Space
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Ctrl+Space or Cmd+Space
+      // Some systems report space as "Unidentified" when combined with Ctrl
+      const isSpace = e.key === ' ' || (e.key === 'Unidentified' && e.code === 'Space');
+      
+      if ((e.ctrlKey || e.metaKey) && isSpace) {
+        e.preventDefault(); // Prevent default browser behavior
+        e.stopPropagation(); // Stop event from bubbling
+        showFloater();
+      }
     };
 
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keyup', handleKeyUp);
-    document.addEventListener('selectionchange', handleSelectionChange);
+    document.addEventListener('keydown', handleKeyDown);
     
     return () => {
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keyup', handleKeyUp);
-      document.removeEventListener('selectionchange', handleSelectionChange);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
@@ -1631,6 +1756,12 @@ bracketMatching: false,
           onAIReplace={handleAIReplace}
           onAIAddAfter={handleAIAddAfter}
           onClose={() => setFormatToolbar(null)}
+          autoFocusAI={formatToolbar.autoFocusAI}
+          onRefocusEditor={() => {
+            if (editorRef.current) {
+              editorRef.current.focus();
+            }
+          }}
         />
       )}
       {contextMenu && contextMenu.show && (
