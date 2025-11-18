@@ -106,19 +106,22 @@ function extractWordsBeforeCursor(doc: Text, cursorPos: number, wordCount: numbe
 // Generate prediction using AIRouter
 async function generatePrediction(context: string, signal?: AbortSignal): Promise<string> {
   try {
-    const systemPrompt = `You are a text completion assistant. Your task is to predict the next few words that naturally continue the given text, do not repeat the input. Only output the predicted words themselves - no explanations, no punctuation unless necessary, no repeating the input. Be concise and contextually accurate.`;
-
+    const systemPrompt = `You are a text completion assistant. continue the user's text input with a short, relevant prediction, the prediction needs to follow the user's input naturally as if he is continuing to write. do not include anything other than the predicted text. avoid starting with repeated words from the input. keep the prediction concise and to the point.`;
     
+    const userPrompt = `${context}`;
+
     const response = await aiRouter.chatCompletion({
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: context }
+        { role: 'user', content: userPrompt }
       ],
       options: {
         stream: false,
-        temperature: 0.1, // Very low temperature for most probable predictions
-        maxTokens: 50, // Limit tokens to roughly 3-5 words
-        topP: 0.3, // Nucleus sampling - focus on most probable tokens
+        temperature: 0.5,      // Increased for more creativity
+        maxTokens: 15,         // Reduced to force conciseness
+        topP: 0.7,             // Increased for a wider choice of words
+        frequencyPenalty: 1.5, // Increased to more strongly discourage repetition
+        presencePenalty: 0.0,  // Removed for now to reduce over-constraining
       }
     });
 
@@ -137,6 +140,26 @@ async function generatePrediction(context: string, signal?: AbortSignal): Promis
     // Limit to approximately 5 words
     const words = prediction.split(WHITESPACE_REGEX).slice(0, 5);
     prediction = words.join(' ');
+
+    // Get unique words from the context for more aggressive repetition filtering
+    const contextWords = context.split(WHITESPACE_REGEX).filter(w => w.length > 0);
+    const contextWordsSet = new Set(contextWords.map(w => w.toLowerCase()));
+
+    let predictionWordsFiltered = prediction.split(WHITESPACE_REGEX)
+                                            .filter(w => w.length > 0);
+
+    // First, handle the last input word repetition (as before)
+    const lastContextWord = contextWords.length > 0 ? contextWords[contextWords.length - 1] : '';
+    const firstPredictionWord = predictionWordsFiltered.length > 0 ? predictionWordsFiltered[0] : '';
+
+    if (lastContextWord && firstPredictionWord && lastContextWord.toLowerCase() === firstPredictionWord.toLowerCase()) {
+      predictionWordsFiltered.shift();
+    }
+
+    // Now, filter out any other words from the prediction that are in the context
+    predictionWordsFiltered = predictionWordsFiltered.filter(word => !contextWordsSet.has(word.toLowerCase()));
+
+    prediction = predictionWordsFiltered.join(' ');
 
     return prediction;
   } catch (error) {
@@ -172,7 +195,7 @@ async function updatePrediction(view: EditorView, cursorPos: number, state: Pred
   state.abort();
 
   // Extract context using optimized function
-  const context = extractWordsBeforeCursor(view.state.doc, cursorPos, 300);
+  const context = extractWordsBeforeCursor(view.state.doc, cursorPos, 150);
   const wordCount = context.split(WHITESPACE_REGEX).length;
 
 
@@ -195,22 +218,16 @@ async function updatePrediction(view: EditorView, cursorPos: number, state: Pred
       return;
     }
     
-    
-    // Only update if cursor hasn't moved significantly
-    const currentCursorPos = view.state.selection.main.head;
-    
-    if (Math.abs(currentCursorPos - cursorPos) <= 2) {
-      // Store prediction WITHOUT the space - space will be added in widget display only
-      state.currentPrediction = prediction || '';
-      state.currentPredictionPos = currentCursorPos;
+    // Store the prediction with the position it was requested for.
+    // The rendering logic will handle showing it only when the cursor is at the correct position.
+    state.currentPrediction = prediction || '';
+    state.currentPredictionPos = cursorPos; // Use original cursor position
 
+    // Trigger a view update to potentially show the prediction
+    view.dispatch({
+      selection: view.state.selection // Keep current selection to trigger update
+    });
 
-      // Trigger view update to show the prediction
-      view.dispatch({
-        selection: view.state.selection // Keep current selection to trigger update
-      });
-    } else {
-    }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       return;

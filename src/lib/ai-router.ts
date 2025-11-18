@@ -32,6 +32,8 @@ export interface ChatCompletionOptions {
   stream?: boolean; // Enable streaming
   stop?: string[]; // Stop sequences
   seed?: number; // For reproducibility
+  frequencyPenalty?: number; // -2.0 to 2.0, penalize tokens based on frequency
+  presencePenalty?: number; // -2.0 to 2.0, penalize tokens based on presence
 }
 
 // Standardized Chat Completion Request
@@ -244,6 +246,8 @@ export class AIRouter {
           num_predict: request.options?.maxTokens,
           stop: request.options?.stop,
           seed: request.options?.seed,
+          frequency_penalty: request.options?.frequencyPenalty,
+          presence_penalty: request.options?.presencePenalty,
         },
       };
 
@@ -299,6 +303,8 @@ export class AIRouter {
           num_predict: request.options?.maxTokens,
           stop: request.options?.stop,
           seed: request.options?.seed,
+          frequency_penalty: request.options?.frequencyPenalty,
+          presence_penalty: request.options?.presencePenalty,
         },
       };
 

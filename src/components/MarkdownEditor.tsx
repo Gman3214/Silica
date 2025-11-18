@@ -15,6 +15,8 @@ import { bulletListPlugin } from './plugins/bulletListPlugin';
 import { codeBlockPlugin } from './plugins/codeBlockPlugin';
 import { blockquotePlugin } from './plugins/blockquotePlugin';
 import { predictTextPlugin, acceptPredictionKeymap } from './plugins/predictTextPlugin';
+import { getPluginSettings } from '../utils/pluginSettings';
+import { aiRouter } from '../lib/ai-router';
 
 // Debounce utility for heavy operations
 function debounce<T extends (...args: any[]) => any>(
@@ -53,11 +55,9 @@ const combinedMarkdownPlugin = ViewPlugin.fromClass(class {
   }
 
   update(update: ViewUpdate) {
-    // Only update on actual document or viewport changes, skip selection-only changes for headers
+    // Only update on document changes or viewport changes
+    // Skip selection-only changes to avoid rebuilding on every cursor movement
     if (update.docChanged || update.viewportChanged) {
-      this.decorations = this.buildDecorations(update.view);
-    } else if (update.selectionSet) {
-      // For selection changes, only rebuild (affects hide/show of markdown syntax)
       this.decorations = this.buildDecorations(update.view);
     }
   }
@@ -250,8 +250,8 @@ const regexDecorationsPlugin = ViewPlugin.fromClass(class {
       return;
     }
     
-    // For document or selection changes, debounce but keep old decorations
-    if (update.docChanged || update.selectionSet) {
+    // Only update on document changes, skip selection-only changes
+    if (update.docChanged) {
       // Clear existing timeout
       if (this.debounceTimeout) {
         clearTimeout(this.debounceTimeout);
@@ -420,8 +420,8 @@ const customMarkdownPlugin = ViewPlugin.fromClass(class {
       return;
     }
     
-    // For document or selection changes, debounce
-    if (update.docChanged || update.selectionSet) {
+    // Only update on document changes, skip selection-only changes
+    if (update.docChanged) {
       if (this.debounceTimeout) {
         clearTimeout(this.debounceTimeout);
       }
@@ -755,6 +755,91 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
       }
     };
 
+    // Show floater when text is selected with keyboard
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // Trigger on Shift+Arrow keys (selection keys) or Ctrl+A (select all)
+      const isSelectAll = (e.ctrlKey || e.metaKey) && e.key === 'a';
+      const isShiftArrow = e.shiftKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key);
+      
+      if (!isSelectAll && !isShiftArrow) {
+        return;
+      }
+
+      setTimeout(() => {
+        if (!editorRef.current || !wrapperRef.current) return;
+
+        const selection = editorRef.current.state.selection.main;
+        const hasSelection = selection.from !== selection.to;
+
+        if (hasSelection) {
+          // Add class to trigger grow animation
+          wrapperRef.current.classList.add('selection-locked');
+          
+          // Approximate toolbar dimensions
+          const toolbarHeight = 200;
+          const toolbarWidth = 260;
+          
+          const viewportHeight = window.innerHeight;
+          const viewportWidth = window.innerWidth;
+          
+          let x: number;
+          let y: number;
+          
+          if (isSelectAll) {
+            // Center the floater in the viewport for Ctrl+A
+            x = (viewportWidth - toolbarWidth) / 2;
+            y = (viewportHeight - toolbarHeight) / 2;
+          } else {
+            // Position relative to selection for Shift+Arrow
+            const coordsStart = editorRef.current.coordsAtPos(selection.from);
+            const coordsEnd = editorRef.current.coordsAtPos(selection.to);
+            
+            if (coordsEnd) {
+              // Center the floater below the selection
+              const selectionWidth = coordsEnd.left - (coordsStart?.left || coordsEnd.left);
+              const selectionCenter = (coordsStart?.left || coordsEnd.left) + selectionWidth / 2;
+              x = selectionCenter - toolbarWidth / 2;
+              y = coordsEnd.bottom + 5;
+              
+              // Check if toolbar would go off bottom of viewport
+              if (y + toolbarHeight > viewportHeight) {
+                y = (coordsStart?.top || coordsEnd.top) - toolbarHeight - 5;
+              }
+              
+              // Check if toolbar would go off right edge of viewport
+              if (x + toolbarWidth > viewportWidth) {
+                x = viewportWidth - toolbarWidth - 10;
+              }
+              
+              // Make sure it doesn't go off left edge
+              if (x < 10) {
+                x = 10;
+              }
+              
+              // Make sure it doesn't go off top edge
+              if (y < 10) {
+                y = 10;
+              }
+            } else {
+              // Fallback to center if coords unavailable
+              x = (viewportWidth - toolbarWidth) / 2;
+              y = (viewportHeight - toolbarHeight) / 2;
+            }
+          }
+          
+          // Get the selected text
+          const selectedText = editorRef.current.state.doc.sliceString(selection.from, selection.to);
+          
+          setFormatToolbar({
+            show: true,
+            position: { x, y },
+            selection: { from: selection.from, to: selection.to },
+            selectedText
+          });
+        }
+      }, 10);
+    };
+
     // Also close toolbar when selection changes (e.g., clicking somewhere)
     const handleSelectionChange = () => {
       setTimeout(() => {
@@ -772,11 +857,13 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
 
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keyup', handleKeyUp);
     document.addEventListener('selectionchange', handleSelectionChange);
     
     return () => {
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keyup', handleKeyUp);
       document.removeEventListener('selectionchange', handleSelectionChange);
     };
   }, []);
@@ -1037,11 +1124,132 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
   };
 
   // Handle AI actions
-  const handleAIAction = (prompt: string, selectedText: string) => {
-    // TODO: Implement AI integration
-    console.log('AI Action:', { prompt, selectedText });
-    // For now, just log the action
-    // In the future, this will call an AI API
+  const handleAIAction = async (prompt: string, selectedText: string) => {
+    if (!editorRef.current || !selectedText) return;
+
+    try {
+      // Check if AI is configured
+      const status = await aiRouter.getConnectionStatus();
+      if (!status.connected || status.provider === 'none') {
+        console.error('AI is not configured or connected');
+        alert('Please configure an AI provider in Settings before using AI features.');
+        return;
+      }
+
+      // Get the current selection range
+      const selection = editorRef.current.state.selection.main;
+      const from = selection.from;
+      const to = selection.to;
+
+      // Build the AI request
+      const systemPrompt = `You are a helpful writing assistant. The user has selected some text and wants you to transform it based on their request. Only return the transformed text without any explanations, quotes, or additional commentary.`;
+      
+      const userPrompt = `${prompt}\n\nText to transform:\n${selectedText}`;
+
+      // Show loading indicator (you can enhance this with a better UI later)
+      console.log('Processing AI request...');
+
+      // Call AI router
+      const response = await aiRouter.chatCompletion({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        options: {
+          temperature: 0.7,
+          maxTokens: 500,
+          topP: 0.9,
+        }
+      });
+
+      // Get the transformed text
+      let transformedText = response.content.trim();
+
+      // Clean up common AI response artifacts
+      transformedText = transformedText.replace(/^["']|["']$/g, ''); // Remove quotes
+      transformedText = transformedText.replace(/^```[\w]*\n?|```$/g, ''); // Remove code blocks
+
+      // Replace the selected text with the AI response
+      editorRef.current.dispatch({
+        changes: {
+          from: from,
+          to: to,
+          insert: transformedText
+        },
+        selection: {
+          anchor: from + transformedText.length,
+          head: from + transformedText.length
+        }
+      });
+
+      console.log('AI transformation completed');
+
+    } catch (error) {
+      console.error('AI action failed:', error);
+      alert(`AI action failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+
+  // Handle AI replace from preview
+  const handleAIReplace = (transformedText: string) => {
+    if (!editorRef.current || !formatToolbar) return;
+
+    try {
+      // Get the current selection range
+      const selection = editorRef.current.state.selection.main;
+      const from = selection.from;
+      const to = selection.to;
+
+      // Replace the selected text with the transformed text
+      editorRef.current.dispatch({
+        changes: {
+          from: from,
+          to: to,
+          insert: transformedText
+        },
+        selection: {
+          anchor: from + transformedText.length,
+          head: from + transformedText.length
+        }
+      });
+
+      console.log('AI transformation replaced selection');
+
+    } catch (error) {
+      console.error('Failed to replace with AI transformation:', error);
+    }
+  };
+
+  // Handle AI add after from preview
+  const handleAIAddAfter = (transformedText: string) => {
+    if (!editorRef.current || !formatToolbar) return;
+
+    try {
+      // Get the current selection range
+      const selection = editorRef.current.state.selection.main;
+      const to = selection.to;
+
+      // Add the transformed text after the selection with a newline
+      const textToInsert = '\n' + transformedText;
+      
+      editorRef.current.dispatch({
+        changes: {
+          from: to,
+          to: to,
+          insert: textToInsert
+        },
+        selection: {
+          anchor: to + textToInsert.length,
+          head: to + textToInsert.length
+        }
+      });
+
+      console.log('AI transformation added after selection');
+
+    } catch (error) {
+      console.error('Failed to add AI transformation:', error);
+    }
   };
 
 
@@ -1323,6 +1531,54 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
     },
   }, { dark: document.documentElement.getAttribute('data-theme') === 'dark' });
 
+  // Get plugin settings
+  const pluginSettings = useMemo(() => getPluginSettings(), []);
+
+  // Build extensions array based on settings
+  const extensions = useMemo(() => {
+    const exts = [
+      markdown({ base: markdownLanguage}),
+      theme,
+      EditorView.lineWrapping,
+    ];
+
+    if (pluginSettings.combinedMarkdownPlugin) {
+      exts.push(combinedMarkdownPlugin);
+    }
+    if (pluginSettings.regexDecorationsPlugin) {
+      exts.push(regexDecorationsPlugin);
+    }
+    if (pluginSettings.noteLinkStylingPlugin) {
+      exts.push(noteLinkStylingPlugin);
+    }
+    if (pluginSettings.customMarkdownPlugin) {
+      exts.push(customMarkdownPlugin);
+    }
+    if (pluginSettings.tablePlugin) {
+      exts.push(tablePlugin);
+    }
+    if (pluginSettings.checkboxPlugin) {
+      exts.push(checkboxPlugin(onChange));
+    }
+    if (pluginSettings.bulletListPlugin) {
+      exts.push(bulletListPlugin);
+    }
+    if (pluginSettings.codeBlockPlugin) {
+      exts.push(codeBlockPlugin);
+    }
+    if (pluginSettings.blockquotePlugin) {
+      exts.push(blockquotePlugin);
+    }
+    if (pluginSettings.predictTextPlugin) {
+      exts.push(predictTextPlugin, acceptPredictionKeymap);
+    }
+    if (pluginSettings.spellCheck) {
+      exts.push(EditorView.contentAttributes.of({ spellcheck: 'true' }));
+    }
+
+    return exts;
+  }, [pluginSettings, onChange]);
+
   return (
     <div ref={wrapperRef} className="codemirror-wrapper">
       <CodeMirror
@@ -1333,24 +1589,7 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
         }}
         value={value}
         height="auto"
-        extensions={[
-          markdown({ base: markdownLanguage}), 
-          combinedMarkdownPlugin, 
-          regexDecorationsPlugin,
-          noteLinkStylingPlugin,
-          customMarkdownPlugin,
-          tablePlugin,
-          checkboxPlugin(onChange),
-          bulletListPlugin,
-          codeBlockPlugin,
-          blockquotePlugin,
-          predictTextPlugin,
-          acceptPredictionKeymap,
-          theme,
-          EditorView.lineWrapping,
-          // Enable native spell checking
-          EditorView.contentAttributes.of({ spellcheck: 'true' })
-        ]}
+        extensions={extensions}
         onChange={handleEditorChange}
         basicSetup={{
           lineNumbers: false,
@@ -1389,6 +1628,8 @@ bracketMatching: false,
           selectedText={formatToolbar.selectedText}
           onFormat={handleFormat}
           onAIAction={handleAIAction}
+          onAIReplace={handleAIReplace}
+          onAIAddAfter={handleAIAddAfter}
           onClose={() => setFormatToolbar(null)}
         />
       )}

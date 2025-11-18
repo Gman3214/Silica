@@ -32,6 +32,8 @@ export interface ChatCompletionOptions {
   num_predict?: number;
   stop?: string[];
   seed?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
 }
 
 export interface ChatCompletionRequest {

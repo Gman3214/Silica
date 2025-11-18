@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { aiRouter } from '../lib/ai-router';
 import './Floater.css';
 
 interface FloaterProps {
@@ -7,13 +8,20 @@ interface FloaterProps {
   selectedText: string;
   onFormat: (format: string) => void;
   onAIAction: (prompt: string, selectedText: string) => void;
+  onAIReplace?: (transformedText: string) => void;
+  onAIAddAfter?: (transformedText: string) => void;
   onClose: () => void;
 }
 
-const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAction, onClose }) => {
+const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAction, onAIReplace, onAIAddAfter, onClose }) => {
   const [aiPrompt, setAiPrompt] = useState('');
   const [showTextOptions, setShowTextOptions] = useState(false);
   const [showMoreAIOptions, setShowMoreAIOptions] = useState(false);
+  const [isAIConfigured, setIsAIConfigured] = useState(false);
+  const [isCheckingAI, setIsCheckingAI] = useState(true);
+  const [isAIProcessing, setIsAIProcessing] = useState(false);
+  const [aiPreview, setAiPreview] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   
   // Load last active tab from localStorage
   const [activeTab, setActiveTab] = useState<'ai' | 'format'>(() => {
@@ -23,18 +31,47 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
   
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load custom AI prompts from localStorage
-  const [customPrompts, setCustomPrompts] = useState<string[]>(() => {
-    const saved = localStorage.getItem('customAIPrompts');
-    return saved ? JSON.parse(saved) : [
-      'Translate to professional tone',
-      'Make it more casual',
-      'Add more details',
-      'Simplify explanation',
-      'Create bullet points',
-      'Rephrase for clarity'
+  // Load AI commands from localStorage
+  interface AICommand {
+    id: string;
+    label: string;
+    prompt: string;
+    pinned: boolean;
+  }
+
+  const [aiCommands, setAiCommands] = useState<AICommand[]>(() => {
+    const saved = localStorage.getItem('aiCommands');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    // Default commands if none exist
+    return [
+      { id: '1', label: 'Format', prompt: 'Format this text properly', pinned: true },
+      { id: '2', label: 'Summarize', prompt: 'Summarize this text', pinned: true },
+      { id: '3', label: 'Shorten', prompt: 'Make this shorter', pinned: true },
+      { id: '4', label: 'Expand', prompt: 'Expand on this', pinned: true },
+      { id: '5', label: 'Fix grammar', prompt: 'Fix grammar and spelling', pinned: true },
     ];
   });
+
+  // Get pinned and unpinned commands
+  const pinnedCommands = aiCommands.filter(cmd => cmd.pinned);
+  const unpinnedCommands = aiCommands.filter(cmd => !cmd.pinned);
+
+  // Check AI configuration on mount
+  useEffect(() => {
+    const checkAI = async () => {
+      try {
+        const status = await aiRouter.getConnectionStatus();
+        setIsAIConfigured(status.connected && status.provider !== 'none');
+      } catch (error) {
+        setIsAIConfigured(false);
+      } finally {
+        setIsCheckingAI(false);
+      }
+    };
+    checkAI();
+  }, []);
 
   // Save active tab to localStorage whenever it changes
   const handleTabChange = (tab: 'ai' | 'format') => {
@@ -47,13 +84,68 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
     onClose();
   };
 
-  const handleAISubmit = (e: React.FormEvent) => {
+  const handleAISubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (aiPrompt.trim()) {
-      onAIAction(aiPrompt, selectedText);
-      setAiPrompt('');
+    if (!aiPrompt.trim() || !selectedText) return;
+
+    setIsAIProcessing(true);
+    setAiError(null);
+
+    try {
+      // Build the AI request
+      const systemPrompt = `You are a helpful writing assistant. The user has selected some text and wants you to transform it based on their request. Only return the transformed text without any explanations, quotes, or additional commentary.`;
+      
+      const userPrompt = `${aiPrompt}\n\nText to transform:\n${selectedText}`;
+
+      // Call AI router
+      const response = await aiRouter.chatCompletion({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        options: {
+          temperature: 0.7,
+          maxTokens: 500,
+          topP: 0.9,
+        }
+      });
+
+      // Get the transformed text
+      let transformedText = response.content.trim();
+
+      // Clean up common AI response artifacts
+      transformedText = transformedText.replace(/^["']|["']$/g, ''); // Remove quotes
+      transformedText = transformedText.replace(/^```[\w]*\n?|```$/g, ''); // Remove code blocks
+
+      // Show preview
+      setAiPreview(transformedText);
+      
+    } catch (error) {
+      console.error('AI processing failed:', error);
+      setAiError(error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setIsAIProcessing(false);
+    }
+  };
+
+  const handleReplacePreview = () => {
+    if (aiPreview && onAIReplace) {
+      onAIReplace(aiPreview);
       onClose();
     }
+  };
+
+  const handleAddAfterPreview = () => {
+    if (aiPreview && onAIAddAfter) {
+      onAIAddAfter(aiPreview);
+      onClose();
+    }
+  };
+
+  const handleDiscardPreview = () => {
+    setAiPreview(null);
+    setAiError(null);
+    setAiPrompt('');
   };
 
   return (
@@ -89,6 +181,86 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
       {/* AI Section */}
       {activeTab === 'ai' && (
         <div className="floater-section floater-ai">
+        {isCheckingAI ? (
+          <div className="floater-ai-status">
+            <div className="floater-loading">Checking AI connection...</div>
+          </div>
+        ) : !isAIConfigured ? (
+          <div className="floater-ai-status">
+            <div className="floater-warning">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span>AI not configured</span>
+            </div>
+            <p className="floater-hint">Configure an AI provider in Settings to use AI features.</p>
+          </div>
+        ) : aiPreview || isAIProcessing || aiError ? (
+          <div className="floater-ai-preview-container">
+            {isAIProcessing ? (
+              <div className="floater-ai-status">
+                <div className="floater-loading">
+                  <svg className="floater-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  Processing...
+                </div>
+              </div>
+            ) : aiError ? (
+              <div className="floater-ai-status">
+                <div className="floater-error">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                  <span>Error: {aiError}</span>
+                </div>
+                <div className="floater-preview-actions">
+                  <button className="floater-preview-btn floater-preview-discard" onClick={handleDiscardPreview}>
+                    Try Again
+                  </button>
+                </div>
+              </div>
+            ) : aiPreview ? (
+              <>
+                <div className="floater-preview-header">
+                  <span>AI Result:</span>
+                </div>
+                <div className="floater-preview-text">
+                  {aiPreview}
+                </div>
+                <div className="floater-preview-actions">
+                  <button className="floater-preview-btn floater-preview-discard" onClick={handleDiscardPreview}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    Discard
+                  </button>
+                  <button className="floater-preview-btn floater-preview-replace" onClick={handleReplacePreview}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Replace
+                  </button>
+                  <button className="floater-preview-btn floater-preview-add" onClick={handleAddAfterPreview}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add After
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : (
+          <>
         <form onSubmit={handleAISubmit} className="floater-ai-form">
           <input
             ref={inputRef}
@@ -106,45 +278,22 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
           </button>
         </form>
         <div className="floater-ai-suggestions">
-          <button 
-            className="floater-suggestion-btn"
-            onClick={() => {
-              setAiPrompt('Format this text properly');
-              inputRef.current?.focus();
-            }}
-          >
-            Format
-          </button>
-          <button 
-            className="floater-suggestion-btn"
-            onClick={() => {
-              setAiPrompt('Summarize this text');
-              inputRef.current?.focus();
-            }}
-          >
-            Summarize
-          </button>
-          <button 
-            className="floater-suggestion-btn"
-            onClick={() => {
-              setAiPrompt('Make this shorter');
-              inputRef.current?.focus();
-            }}
-          >
-            Shorten
-          </button>
-          <button 
-            className="floater-suggestion-btn"
-            onClick={() => {
-              setAiPrompt('Expand on this');
-              inputRef.current?.focus();
-            }}
-          >
-            Expand
-          </button>
+          {pinnedCommands.map((command) => (
+            <button 
+              key={command.id}
+              className="floater-suggestion-btn"
+              onClick={() => {
+                setAiPrompt(command.prompt);
+                inputRef.current?.focus();
+              }}
+            >
+              {command.label}
+            </button>
+          ))}
         </div>
 
         {/* More AI Options Dropdown */}
+        {unpinnedCommands.length > 0 && (
         <div className="floater-more-options">
           <button 
             className="floater-toggle"
@@ -166,21 +315,24 @@ const Floater: React.FC<FloaterProps> = ({ x, y, selectedText, onFormat, onAIAct
 
           {showMoreAIOptions && (
             <div className="floater-expanded floater-ai-more">
-              {customPrompts.map((prompt, index) => (
+              {unpinnedCommands.map((command) => (
                 <button
-                  key={index}
+                  key={command.id}
                   className="floater-suggestion-btn"
                   onClick={() => {
-                    setAiPrompt(prompt);
+                    setAiPrompt(command.prompt);
                     inputRef.current?.focus();
                   }}
                 >
-                  {prompt}
+                  {command.label}
                 </button>
               ))}
             </div>
           )}
         </div>
+        )}
+        </>
+        )}
       </div>
       )}
 
