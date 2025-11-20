@@ -697,6 +697,20 @@ const MainPage: React.FC = () => {
       await loadNotes(projectPath, false);
       await loadTags(projectPath);
       
+      // If in a workspace, reload its contents
+      if (activeWorkspace && activeWorkspace !== projectPath) {
+        try {
+          const contents = await window.electronAPI.listNotes(activeWorkspace);
+          setFolderContents(prev => {
+            const newMap = new Map(prev);
+            newMap.set(activeWorkspace, contents);
+            return newMap;
+          });
+        } catch (error) {
+          console.error('Failed to reload workspace contents:', error);
+        }
+      }
+      
       // If openNote is true, navigate to the new note
       if (openNote) {
         loadNote(filePath);
@@ -767,9 +781,27 @@ const MainPage: React.FC = () => {
           : tab
       ));
       
+      // Update the selected note and title immediately
       setSelectedNote(newPath);
-      await loadNotes(projectPath);
+      setNoteTitle(newTitle);
+      
+      // Reload the notes list and tags
+      await loadNotes(projectPath, false); // Don't auto-select first note
       await loadTags(projectPath);
+      
+      // If in a workspace, reload its contents
+      if (activeWorkspace && activeWorkspace !== projectPath) {
+        try {
+          const contents = await window.electronAPI.listNotes(activeWorkspace);
+          setFolderContents(prev => {
+            const newMap = new Map(prev);
+            newMap.set(activeWorkspace, contents);
+            return newMap;
+          });
+        } catch (error) {
+          console.error('Failed to reload workspace contents:', error);
+        }
+      }
     } catch (error) {
       console.error('Failed to rename note:', error);
       // Revert title on error
@@ -839,6 +871,20 @@ const MainPage: React.FC = () => {
       if (projectPath) {
         await loadNotes(projectPath);
         await loadTags(projectPath);
+        
+        // If in a workspace, reload its contents
+        if (activeWorkspace && activeWorkspace !== projectPath) {
+          try {
+            const contents = await window.electronAPI.listNotes(activeWorkspace);
+            setFolderContents(prev => {
+              const newMap = new Map(prev);
+              newMap.set(activeWorkspace, contents);
+              return newMap;
+            });
+          } catch (error) {
+            console.error('Failed to reload workspace contents:', error);
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to delete note:', error);
@@ -886,6 +932,20 @@ const MainPage: React.FC = () => {
       if (projectPath) {
         await loadNotes(projectPath);
         await loadTags(projectPath);
+        
+        // If in a workspace, reload its contents
+        if (activeWorkspace && activeWorkspace !== projectPath) {
+          try {
+            const contents = await window.electronAPI.listNotes(activeWorkspace);
+            setFolderContents(prev => {
+              const newMap = new Map(prev);
+              newMap.set(activeWorkspace, contents);
+              return newMap;
+            });
+          } catch (error) {
+            console.error('Failed to reload workspace contents:', error);
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to delete folder:', error);
