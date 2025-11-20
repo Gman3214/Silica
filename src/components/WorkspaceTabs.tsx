@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import feather from 'feather-icons';
 import './WorkspaceTabs.css';
 
 interface Workspace {
   name: string;
   path: string;
   color: string;
+  icon?: string;
 }
 
 interface WorkspaceTabsProps {
@@ -53,12 +55,13 @@ const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
           onDragOver={(e) => handleDragOver(e, null)}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(null, e)}
+          style={{ '--workspace-color': 'var(--accent)' } as React.CSSProperties}
           title="Default"
         >
           <svg width="14" height="14" viewBox="0 0 18 18" fill="none" className="workspace-tab-icon">
-            <circle cx="5.5" cy="9" r="2.5" stroke="#6b7280" strokeWidth="1.5"/>
-            <circle cx="12.5" cy="9" r="2.5" stroke="#6b7280" strokeWidth="1.5"/>
-            <path d="M8 9H10" stroke="#6b7280" strokeWidth="1.5"/>
+            <circle cx="5.5" cy="9" r="2.5" stroke="var(--accent)" strokeWidth="1.5"/>
+            <circle cx="12.5" cy="9" r="2.5" stroke="var(--accent)" strokeWidth="1.5"/>
+            <path d="M8 9H10" stroke="var(--accent)" strokeWidth="1.5"/>
           </svg>
         </div>
 
@@ -74,10 +77,29 @@ const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
             style={{ '--workspace-color': workspace.color } as React.CSSProperties}
             title={workspace.name}
           >
-            <svg width="14" height="14" viewBox="0 0 18 18" fill="none" className="workspace-tab-icon">
-              <rect x="3" y="3" width="12" height="12" rx="2" stroke={workspace.color} strokeWidth="1.5"/>
-              <circle cx="9" cy="9" r="2" fill={workspace.color}/>
-            </svg>
+            {workspace.icon && feather.icons[workspace.icon] ? (
+              <span 
+                className="workspace-tab-icon"
+                style={{ 
+                  width: '14px', 
+                  height: '14px',
+                  display: 'flex',
+                  color: workspace.color
+                }}
+                dangerouslySetInnerHTML={{ 
+                  __html: feather.icons[workspace.icon].toSvg({ 
+                    width: 14, 
+                    height: 14, 
+                    'stroke-width': 2
+                  }) 
+                }} 
+              />
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 18 18" fill="none" className="workspace-tab-icon">
+                <rect x="3" y="3" width="12" height="12" rx="2" stroke={workspace.color} strokeWidth="1.5"/>
+                <circle cx="9" cy="9" r="2" fill={workspace.color}/>
+              </svg>
+            )}
           </div>
         ))}
 

@@ -61,12 +61,15 @@
     "@uiw/react-codemirror": "^4.25.2",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^8.2.0",
+    "feather-icons": "^4.29.2",
     "ollama": "^0.6.2",
     "openai": "^6.8.1",
     "path-browserify": "^1.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.9.5",
-    "reactflow": "^11.11.4"
+    "reactflow": "^11.11.4",
+    "remark-gfm": "^4.0.1"
   }
 }

@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
+import feather from 'feather-icons';
 import './WorkspaceHeader.css';
 
 interface WorkspaceHeaderProps {
   workspaceName: string;
   workspaceColor?: string;
+  workspaceIcon?: string;
   isShared: boolean;
   isCreating?: boolean;
   onNameChange: (newName: string) => void;
   onColorChange?: (newColor: string) => void;
+  onIconChange?: (newIcon: string) => void;
   onDelete?: () => void;
   onSettingsClick: () => void;
   onCancelCreate?: () => void;
@@ -16,10 +19,12 @@ interface WorkspaceHeaderProps {
 const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   workspaceName,
   workspaceColor,
+  workspaceIcon,
   isShared,
   isCreating = false,
   onNameChange,
   onColorChange,
+  onIconChange,
   onDelete,
   onSettingsClick,
   onCancelCreate,
@@ -31,6 +36,7 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showIconPicker, setShowIconPicker] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -59,6 +65,7 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
       ) {
         setShowMenu(false);
         setShowColorPicker(false);
+        setShowIconPicker(false);
       }
     };
 
@@ -139,6 +146,14 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
     setShowMenu(false);
   };
 
+  const handleIconChange = (icon: string) => {
+    if (onIconChange) {
+      onIconChange(icon);
+    }
+    setShowIconPicker(false);
+    setShowMenu(false);
+  };
+
   const handleDeleteClick = () => {
     setShowMenu(false);
     setShowDeleteDialog(true);
@@ -168,6 +183,38 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
     '#f97316', // orange
     '#6366f1', // indigo
     '#06b6d4', // cyan
+  ];
+
+  const AVAILABLE_ICONS = [
+    'briefcase', 'code', 'coffee', 'cpu', 'database', 'file-text', 'folder', 
+    'globe', 'heart', 'home', 'image', 'layers', 'layout', 'music', 'package', 
+    'pen-tool', 'settings', 'smile', 'star', 'terminal', 'tool', 'user', 'zap'
+  ];
+
+  const icons = [
+    'folder', 'briefcase', 'book', 'star', 'heart', 'flag', 'tag', 'bookmark',
+    'monitor', 'smartphone', 'cpu', 'database', 'hard-drive', 'server',
+    'activity', 'airplay', 'anchor', 'aperture', 'archive', 'award',
+    'bar-chart', 'battery', 'bell', 'bluetooth', 'box', 'camera',
+    'cast', 'check-circle', 'clipboard', 'clock', 'cloud', 'code',
+    'coffee', 'command', 'compass', 'copy', 'credit-card', 'crop',
+    'crosshair', 'disc', 'dollar-sign', 'download', 'droplet', 'edit',
+    'eye', 'feather', 'file', 'film', 'filter', 'gift', 'globe',
+    'grid', 'hash', 'headphones', 'home', 'image', 'inbox', 'key',
+    'layers', 'layout', 'life-buoy', 'link', 'list', 'lock', 'mail',
+    'map', 'menu', 'message-circle', 'message-square', 'mic', 'moon',
+    'mouse-pointer', 'music', 'navigation', 'package', 'paperclip',
+    'pause', 'pen-tool', 'percent', 'phone', 'pie-chart', 'play',
+    'plus', 'pocket', 'power', 'printer', 'radio', 'refresh-cw',
+    'repeat', 'save', 'scissors', 'search', 'send', 'settings',
+    'share', 'shield', 'shopping-bag', 'shopping-cart', 'shuffle',
+    'sidebar', 'sliders', 'smile', 'speaker', 'square', 'sun',
+    'tablet', 'target', 'terminal', 'thermometer', 'thumbs-up',
+    'toggle-left', 'toggle-right', 'tool', 'trash', 'trello',
+    'trending-up', 'triangle', 'truck', 'tv', 'twitch', 'twitter',
+    'type', 'umbrella', 'underline', 'unlock', 'upload', 'user',
+    'users', 'video', 'voicemail', 'volume-2', 'watch', 'wifi',
+    'wind', 'x', 'zap', 'zoom-in', 'zoom-out'
   ];
 
   return (
@@ -207,7 +254,10 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             <div ref={menuRef} className="workspace-menu">
               <button
                 className="workspace-menu-item"
-                onClick={() => setShowColorPicker(!showColorPicker)}
+                onClick={() => {
+                  setShowColorPicker(!showColorPicker);
+                  setShowIconPicker(false);
+                }}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" fill="none"/>
@@ -226,6 +276,47 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                       onClick={() => handleColorChange(color)}
                       title={color}
                     />
+                  ))}
+                </div>
+              )}
+
+              <button
+                className="workspace-menu-item"
+                onClick={() => {
+                  setShowIconPicker(!showIconPicker);
+                  setShowColorPicker(false);
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                Change Icon
+              </button>
+
+              {showIconPicker && (
+                <div className="icon-picker-dropdown">
+                  {icons.map(icon => (
+                    <button
+                      key={icon}
+                      className={`icon-option ${workspaceIcon === icon ? 'selected' : ''}`}
+                      onClick={() => handleIconChange(icon)}
+                      title={icon}
+                    >
+                      <span 
+                        className="icon-svg-wrapper"
+                        dangerouslySetInnerHTML={{ 
+                          __html: feather.icons[icon] ? feather.icons[icon].toSvg({ 
+                            width: 16, 
+                            height: 16, 
+                            'stroke-width': 2,
+                            class: 'feather-icon'
+                          }) : '' 
+                        }} 
+                      />
+                    </button>
                   ))}
                 </div>
               )}

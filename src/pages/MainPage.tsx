@@ -13,6 +13,7 @@ interface Note {
   isFolder?: boolean;
   isWorkspace?: boolean;
   workspaceColor?: string;
+  workspaceIcon?: string;
   content?: string;
 }
 
@@ -42,12 +43,13 @@ const MainPage: React.FC = () => {
   const [openTabs, setOpenTabs] = useState<Tab[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
-  const [workspaces, setWorkspaces] = useState<Array<{ name: string; path: string; color: string }>>([]);
+  const [workspaces, setWorkspaces] = useState<Array<{ name: string; path: string; color: string; icon?: string }>>([]);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('New Folder');
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState('New Workspace');
   const [newWorkspaceColor, setNewWorkspaceColor] = useState('#3b82f6');
+  const [newWorkspaceIcon, setNewWorkspaceIcon] = useState('folder');
   const [draggedNote, setDraggedNote] = useState<Note | null>(null);
   const [folderContents, setFolderContents] = useState<Map<string, Note[]>>(new Map());
   const [tags, setTags] = useState<{ [tag: string]: Array<{ name: string; path: string }> }>({});
@@ -124,6 +126,7 @@ const MainPage: React.FC = () => {
         name: note.name,
         path: note.path,
         color: note.workspaceColor || '#3b82f6',
+        icon: note.workspaceIcon || 'folder',
       }));
       setWorkspaces(workspaceItems);
       
@@ -253,7 +256,7 @@ const MainPage: React.FC = () => {
 
     try {
       const config = await window.electronAPI.getWorkspaceConfig(workspacePath);
-      await window.electronAPI.updateWorkspaceConfig(workspacePath, newName, config.color);
+      await window.electronAPI.updateWorkspaceConfig(workspacePath, newName, config.color, config.icon || 'folder');
       
       // Refresh the notes list to update workspace names
       if (projectPath) {
@@ -269,7 +272,7 @@ const MainPage: React.FC = () => {
 
     try {
       const config = await window.electronAPI.getWorkspaceConfig(workspacePath);
-      await window.electronAPI.updateWorkspaceConfig(workspacePath, config.name, newColor);
+      await window.electronAPI.updateWorkspaceConfig(workspacePath, config.name, newColor, config.icon || 'folder');
       
       // Refresh the notes list to update workspace colors
       if (projectPath) {
@@ -277,6 +280,22 @@ const MainPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to update workspace color:', error);
+    }
+  };
+
+  const handleWorkspaceIconChange = async (workspacePath: string | null, newIcon: string) => {
+    if (!workspacePath) return;
+
+    try {
+      const config = await window.electronAPI.getWorkspaceConfig(workspacePath);
+      await window.electronAPI.updateWorkspaceConfig(workspacePath, config.name, config.color, newIcon);
+      
+      // Refresh the notes list to update workspace icons
+      if (projectPath) {
+        await loadNotes(projectPath, false);
+      }
+    } catch (error) {
+      console.error('Failed to update workspace icon:', error);
     }
   };
 
@@ -450,6 +469,7 @@ const MainPage: React.FC = () => {
     setCreatingWorkspace(true);
     setNewWorkspaceName('New Workspace');
     setNewWorkspaceColor(generateWorkspaceColor());
+    setNewWorkspaceIcon('folder');
   };
 
   const confirmCreateFolder = async () => {
@@ -492,13 +512,14 @@ const MainPage: React.FC = () => {
     }
 
     try {
-      console.log('Creating workspace:', workspaceName, 'with color:', newWorkspaceColor);
-      await window.electronAPI.createWorkspace(projectPath, workspaceName, newWorkspaceColor);
+      console.log('Creating workspace:', workspaceName, 'with color:', newWorkspaceColor, 'and icon:', newWorkspaceIcon);
+      await window.electronAPI.createWorkspace(projectPath, workspaceName, newWorkspaceColor, newWorkspaceIcon);
       console.log('Workspace created, reloading notes...');
       await loadNotes(projectPath);
       setCreatingWorkspace(false);
       setNewWorkspaceName('New Workspace');
       setNewWorkspaceColor('#3b82f6');
+      setNewWorkspaceIcon('folder');
     } catch (error) {
       console.error('Failed to create workspace:', error);
       alert('Failed to create workspace: ' + error);
@@ -510,6 +531,7 @@ const MainPage: React.FC = () => {
     setCreatingWorkspace(false);
     setNewWorkspaceName('New Workspace');
     setNewWorkspaceColor('#3b82f6');
+    setNewWorkspaceIcon('folder');
   };
 
   const toggleFolder = async (folderPath: string) => {
@@ -683,6 +705,39 @@ const MainPage: React.FC = () => {
       return filePath;
     } catch (error) {
       console.error('Failed to create note:', error);
+      throw error;
+    }
+  };
+
+  const saveChatAsNote = async (title: string, content: string): Promise<void> => {
+    if (!projectPath) return;
+
+    try {
+      // Create the new note in active workspace or root
+      const targetPath = activeWorkspace || projectPath;
+      const filePath = await window.electronAPI.createNote(targetPath, title);
+      
+      // Save the content to the new note
+      await window.electronAPI.saveNote(filePath, content);
+      
+      // Reload notes and tags
+      await loadNotes(projectPath, false);
+      await loadTags(projectPath);
+      
+      // Refresh workspace contents if in a workspace
+      if (activeWorkspace) {
+        const contents = await window.electronAPI.listNotes(activeWorkspace);
+        setFolderContents(prev => {
+          const newMap = new Map(prev);
+          newMap.set(activeWorkspace, contents);
+          return newMap;
+        });
+      }
+      
+      // Open the new note
+      loadNote(filePath);
+    } catch (error) {
+      console.error('Failed to save chat as note:', error);
       throw error;
     }
   };
@@ -1029,6 +1084,7 @@ const MainPage: React.FC = () => {
           creatingWorkspace={creatingWorkspace}
           newWorkspaceName={newWorkspaceName}
           newWorkspaceColor={newWorkspaceColor}
+          newWorkspaceIcon={newWorkspaceIcon}
           isLoading={isLoading}
           onNoteClick={loadNote}
           onContextMenu={handleContextMenu}
@@ -1037,6 +1093,7 @@ const MainPage: React.FC = () => {
           onWorkspaceSelect={handleWorkspaceSelect}
           onWorkspaceNameChange={handleWorkspaceNameChange}
           onWorkspaceColorChange={handleWorkspaceColorChange}
+          onWorkspaceIconChange={handleWorkspaceIconChange}
           onWorkspaceDelete={handleWorkspaceDelete}
           onWorkspaceSettings={handleWorkspaceSettings}
           onWorkspaceDrop={handleWorkspaceDrop}
@@ -1078,6 +1135,7 @@ const MainPage: React.FC = () => {
             openTabs={openTabs}
             notes={notes}
             workspaceTags={getWorkspaceTagNames()}
+            projectPath={projectPath || undefined}
             onTitleChange={setNoteTitle}
             onTitleBlur={() => renameNote(noteTitle)}
             onContentChange={setNoteContent}
@@ -1101,6 +1159,7 @@ const MainPage: React.FC = () => {
             } : null}
             allNotes={notesWithContent}
             onNoteClick={loadNote}
+            onSaveChat={saveChatAsNote}
           />
         </div>
       </div>

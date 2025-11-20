@@ -7,6 +7,7 @@ export interface PluginSettings {
   codeBlockPlugin: boolean;
   blockquotePlugin: boolean;
   predictTextPlugin: boolean;
+  imagePlugin: boolean;
   spellCheck: boolean;
   combinedMarkdownPlugin: boolean;
   regexDecorationsPlugin: boolean;
@@ -21,6 +22,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
   codeBlockPlugin: true,
   blockquotePlugin: true,
   predictTextPlugin: true,
+  imagePlugin: true,
   spellCheck: true,
   combinedMarkdownPlugin: true,
   regexDecorationsPlugin: true,
@@ -65,6 +67,7 @@ export const PLUGIN_LABELS: Record<keyof PluginSettings, string> = {
   codeBlockPlugin: 'Code Blocks',
   blockquotePlugin: 'Blockquotes',
   predictTextPlugin: 'Text Prediction',
+  imagePlugin: 'Image Support',
   spellCheck: 'Spell Checking',
   combinedMarkdownPlugin: 'Markdown Headers',
   regexDecorationsPlugin: 'Syntax Highlighting',
@@ -79,6 +82,7 @@ export const PLUGIN_DESCRIPTIONS: Record<keyof PluginSettings, string> = {
   codeBlockPlugin: 'Enable code block syntax highlighting',
   blockquotePlugin: 'Enable blockquote formatting',
   predictTextPlugin: 'Enable AI-powered text prediction',
+  imagePlugin: 'Enable image paste, drag-drop, and rendering',
   spellCheck: 'Enable native spell checking',
   combinedMarkdownPlugin: 'Enable header styling and markdown syntax',
   regexDecorationsPlugin: 'Enable regex-based decorations',

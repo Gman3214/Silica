@@ -16,7 +16,7 @@ interface Note {
 interface NotesSidebarProps {
   notes: Note[];
   allNotes: Note[];
-  workspaces: Array<{ name: string; path: string; color: string }>;
+  workspaces: Array<{ name: string; path: string; color: string; icon?: string }>;
   activeWorkspace: string | null;
   tags: { [tag: string]: Array<{ name: string; path: string }> };
   selectedNote: string | null;
@@ -29,6 +29,7 @@ interface NotesSidebarProps {
   creatingWorkspace: boolean;
   newWorkspaceName: string;
   newWorkspaceColor: string;
+  newWorkspaceIcon: string;
   isLoading: boolean;
   onNoteClick: (path: string) => void;
   onContextMenu: (e: React.MouseEvent, note: Note) => void;
@@ -37,6 +38,7 @@ interface NotesSidebarProps {
   onWorkspaceSelect: (path: string | null) => void;
   onWorkspaceNameChange: (path: string | null, newName: string) => void;
   onWorkspaceColorChange: (path: string | null, newColor: string) => void;
+  onWorkspaceIconChange: (path: string | null, newIcon: string) => void;
   onWorkspaceDelete: (path: string | null) => void;
   onWorkspaceSettings: (path: string | null) => void;
   onWorkspaceDrop?: (workspacePath: string | null, e: React.DragEvent) => void;
@@ -73,6 +75,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
   creatingWorkspace,
   newWorkspaceName,
   newWorkspaceColor,
+  newWorkspaceIcon,
   isLoading,
   onNoteClick,
   onContextMenu,
@@ -81,6 +84,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
   onWorkspaceSelect,
   onWorkspaceNameChange,
   onWorkspaceColorChange,
+  onWorkspaceIconChange,
   onWorkspaceDelete,
   onWorkspaceSettings,
   onWorkspaceDrop,
@@ -103,6 +107,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
   const activeWorkspaceData = workspaces.find(w => w.path === activeWorkspace);
   const workspaceName = activeWorkspace === null ? 'Default' : (activeWorkspaceData?.name || 'Unknown');
   const workspaceColor = activeWorkspaceData?.color;
+  const workspaceIcon = activeWorkspaceData?.icon;
 
   return (
     <div className="notes-sidebar">
@@ -116,6 +121,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
       <WorkspaceHeader
         workspaceName={creatingWorkspace ? newWorkspaceName : workspaceName}
         workspaceColor={workspaceColor}
+        workspaceIcon={creatingWorkspace ? newWorkspaceIcon : workspaceIcon}
         isShared={activeWorkspace === null && !creatingWorkspace}
         isCreating={creatingWorkspace}
         onNameChange={(newName) => {
@@ -128,6 +134,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
           }
         }}
         onColorChange={activeWorkspace ? (newColor) => onWorkspaceColorChange(activeWorkspace, newColor) : undefined}
+        onIconChange={activeWorkspace ? (newIcon) => onWorkspaceIconChange(activeWorkspace, newIcon) : undefined}
         onDelete={activeWorkspace ? () => onWorkspaceDelete(activeWorkspace) : undefined}
         onCancelCreate={onCancelCreateWorkspace}
         onSettingsClick={() => onWorkspaceSettings(activeWorkspace)}

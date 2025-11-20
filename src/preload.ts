@@ -16,12 +16,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listNotes: (folderPath: string) => ipcRenderer.invoke('list-notes', folderPath),
   createNote: (folderPath: string, title: string) => ipcRenderer.invoke('create-note', folderPath, title),
   createFolder: (parentPath: string, folderName: string) => ipcRenderer.invoke('create-folder', parentPath, folderName),
-  createWorkspace: (parentPath: string, workspaceName: string, color: string) => ipcRenderer.invoke('create-workspace', parentPath, workspaceName, color),
+  createWorkspace: (parentPath: string, workspaceName: string, color: string, icon: string) => ipcRenderer.invoke('create-workspace', parentPath, workspaceName, color, icon),
   getWorkspaceConfig: (workspacePath: string) => ipcRenderer.invoke('get-workspace-config', workspacePath),
-  updateWorkspaceConfig: (workspacePath: string, name: string, color: string) => ipcRenderer.invoke('update-workspace-config', workspacePath, name, color),
+  updateWorkspaceConfig: (workspacePath: string, name: string, color: string, icon: string) => ipcRenderer.invoke('update-workspace-config', workspacePath, name, color, icon),
   moveNote: (notePath: string, targetFolderPath: string) => ipcRenderer.invoke('move-note', notePath, targetFolderPath),
   getAllTags: (folderPath: string) => ipcRenderer.invoke('get-all-tags', folderPath),
   searchNotes: (folderPath: string, query: string) => ipcRenderer.invoke('search-notes', folderPath, query),
+  saveImage: (projectPath: string, fileName: string, imageData: Uint8Array) => ipcRenderer.invoke('save-image', projectPath, fileName, imageData),
+  readImage: (imagePath: string) => ipcRenderer.invoke('read-image', imagePath),
   
   // Settings
   getSetting: (key: string) => ipcRenderer.invoke('get-setting', key),
@@ -47,12 +49,12 @@ export interface ElectronAPI {
   deleteNote: (filePath: string) => Promise<void>;
   deleteFolder: (folderPath: string) => Promise<void>;
   renameNote: (oldPath: string, newTitle: string) => Promise<string>;
-  listNotes: (folderPath: string) => Promise<Array<{ name: string; path: string; modified: number; isFolder: boolean; isWorkspace?: boolean; workspaceColor?: string }>>;
+  listNotes: (folderPath: string) => Promise<Array<{ name: string; path: string; modified: number; isFolder: boolean; isWorkspace?: boolean; workspaceColor?: string; workspaceIcon?: string }>>;
   createNote: (folderPath: string, title: string) => Promise<string>;
   createFolder: (parentPath: string, folderName: string) => Promise<string>;
-  createWorkspace: (parentPath: string, workspaceName: string, color: string) => Promise<string>;
-  getWorkspaceConfig: (workspacePath: string) => Promise<{ name: string; color: string; createdAt: number } | null>;
-  updateWorkspaceConfig: (workspacePath: string, name: string, color: string) => Promise<{ name: string; color: string; createdAt: number; updatedAt: number }>;
+  createWorkspace: (parentPath: string, workspaceName: string, color: string, icon: string) => Promise<string>;
+  getWorkspaceConfig: (workspacePath: string) => Promise<{ name: string; color: string; icon?: string; createdAt: number } | null>;
+  updateWorkspaceConfig: (workspacePath: string, name: string, color: string, icon: string) => Promise<{ name: string; color: string; icon?: string; createdAt: number; updatedAt: number }>;
   moveNote: (notePath: string, targetFolderPath: string) => Promise<string>;
   getAllTags: (folderPath: string) => Promise<{ [tag: string]: Array<{ name: string; path: string }> }>;
   searchNotes: (folderPath: string, query: string) => Promise<Array<{
@@ -62,6 +64,8 @@ export interface ElectronAPI {
     matchType: 'title' | 'content';
     snippet?: string;
   }>>;
+  saveImage: (projectPath: string, fileName: string, imageData: Uint8Array) => Promise<string>;
+  readImage: (imagePath: string) => Promise<string>;
   getSetting: (key: string) => Promise<any>;
   setSetting: (key: string, value: any) => Promise<void>;
   onOpenCustomContextMenu: (callback: (event: any, data: any) => void) => () => void;

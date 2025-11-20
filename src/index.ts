@@ -104,6 +104,7 @@ ipcMain.handle('list-notes', async (event, folderPath: string) => {
             isFolder: true,
             isWorkspace: workspaceConfig !== null,
             workspaceColor: workspaceConfig?.color,
+            workspaceIcon: workspaceConfig?.icon,
           };
         } else if (file.endsWith('.md')) {
           return {
@@ -313,7 +314,7 @@ ipcMain.handle('create-note', async (event, folderPath: string, title: string) =
 });
 
 // Create a new workspace
-ipcMain.handle('create-workspace', async (event, parentPath: string, workspaceName: string, color: string) => {
+ipcMain.handle('create-workspace', async (event, parentPath: string, workspaceName: string, color: string, icon: string) => {
   try {
     // Sanitize workspace name
     const sanitizedName = workspaceName.replace(/[^a-zA-Z0-9 ]/g, '_');
@@ -329,6 +330,7 @@ ipcMain.handle('create-workspace', async (event, parentPath: string, workspaceNa
     const config = {
       name: workspaceName,
       color: color,
+      icon: icon,
       createdAt: Date.now(),
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
@@ -358,7 +360,7 @@ ipcMain.handle('get-workspace-config', async (event, workspacePath: string) => {
 });
 
 // Update workspace config
-ipcMain.handle('update-workspace-config', async (event, workspacePath: string, name: string, color: string) => {
+ipcMain.handle('update-workspace-config', async (event, workspacePath: string, name: string, color: string, icon: string) => {
   try {
     const configPath = path.join(workspacePath, '.workspace.json');
     
@@ -375,6 +377,7 @@ ipcMain.handle('update-workspace-config', async (event, workspacePath: string, n
     // Update config
     config.name = name;
     config.color = color;
+    if (icon) config.icon = icon;
     config.updatedAt = Date.now();
     
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
@@ -482,6 +485,44 @@ ipcMain.handle('set-setting', async (event, key: string, value: any) => {
 // Replace a misspelled word
 ipcMain.on('replace-misspelling', (event, suggestion: string) => {
   event.sender.replaceMisspelling(suggestion);
+});
+
+// Save image file
+ipcMain.handle('save-image', async (event, projectPath: string, fileName: string, imageData: Uint8Array) => {
+  try {
+    const imagePath = path.join(projectPath, fileName);
+    // Convert Uint8Array to Buffer for writing
+    const buffer = Buffer.from(imageData);
+    fs.writeFileSync(imagePath, buffer);
+    return imagePath;
+  } catch (error) {
+    console.error('Error saving image:', error);
+    throw error;
+  }
+});
+
+// Read image file and return as base64 data URL
+ipcMain.handle('read-image', async (event, imagePath: string) => {
+  try {
+    const buffer = fs.readFileSync(imagePath);
+    const base64 = buffer.toString('base64');
+    // Detect mime type from extension
+    const ext = path.extname(imagePath).toLowerCase();
+    const mimeTypes: { [key: string]: string } = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+      '.bmp': 'image/bmp'
+    };
+    const mimeType = mimeTypes[ext] || 'image/png';
+    return `data:${mimeType};base64,${base64}`;
+  } catch (error) {
+    console.error('Error reading image:', error);
+    throw error;
+  }
 });
 
 // This method will be called when Electron has finished

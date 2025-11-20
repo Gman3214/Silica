@@ -8,6 +8,7 @@ import { tags as t } from '@lezer/highlight';
 import Autocomplete, { AutocompleteItem } from './Autocomplete';
 import Floater from './Floater';
 import ContextMenu, { ContextMenuItem } from './ContextMenu';
+import ImageViewer from './ImageViewer';
 import './MarkdownEditor.css';
 import { tablePlugin } from './plugins/tablePlugin';
 import { checkboxPlugin } from './plugins/checkboxPlugin';
@@ -15,6 +16,7 @@ import { bulletListPlugin } from './plugins/bulletListPlugin';
 import { codeBlockPlugin } from './plugins/codeBlockPlugin';
 import { blockquotePlugin } from './plugins/blockquotePlugin';
 import { predictTextPlugin, acceptPredictionKeymap } from './plugins/predictTextPlugin';
+import { imagePlugin } from './plugins/imagePlugin';
 import { getPluginSettings } from '../utils/pluginSettings';
 import { aiRouter } from '../lib/ai-router';
 
@@ -44,6 +46,7 @@ interface MarkdownEditorProps {
   currentNotePath?: string;
   onCreateNote?: (title: string, openNote: boolean, updatedContent?: string) => Promise<string | void>;
   workspaceTags?: string[];
+  projectPath?: string | null;
 }
 
 // Combined plugin for headers and markdown hiding - more efficient with single syntax tree traversal
@@ -527,7 +530,8 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
   onNoteLink,
   currentNotePath,
   onCreateNote,
-  workspaceTags = []
+  workspaceTags = [],
+  projectPath = null
 }, ref) => {
   const [autocomplete, setAutocomplete] = useState<{
     show: boolean;
@@ -551,6 +555,12 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
     position: { x: number; y: number };
     items: ContextMenuItem[];
   } | null>(null);
+
+  const [imageViewer, setImageViewer] = useState<{
+    show: boolean;
+    src: string;
+    alt: string;
+  } | null>(null);
   
   const editorRef = useRef<any>(null);
   const autocompleteRef = useRef(autocomplete);
@@ -570,6 +580,22 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
   useEffect(() => {
     autocompleteRef.current = autocomplete;
   }, [autocomplete]);
+
+  // Listen for image viewer events
+  useEffect(() => {
+    const handleOpenImageViewer = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { src, alt } = customEvent.detail;
+      setImageViewer({ show: true, src, alt });
+    };
+
+    const wrapper = wrapperRef.current;
+    wrapper?.addEventListener('openImageViewer', handleOpenImageViewer as EventListener);
+
+    return () => {
+      wrapper?.removeEventListener('openImageViewer', handleOpenImageViewer as EventListener);
+    };
+  }, []);
 
   // Filter notes based on query, excluding current note
   const filterNotes = (query: string): AutocompleteItem[] => {
@@ -1697,12 +1723,15 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
     if (pluginSettings.predictTextPlugin) {
       exts.push(predictTextPlugin, acceptPredictionKeymap);
     }
+    if (pluginSettings.imagePlugin && projectPath) {
+      exts.push(imagePlugin({ projectPath, onChange }));
+    }
     if (pluginSettings.spellCheck) {
       exts.push(EditorView.contentAttributes.of({ spellcheck: 'true' }));
     }
 
     return exts;
-  }, [pluginSettings, onChange]);
+  }, [pluginSettings, onChange, projectPath]);
 
   return (
     <div ref={wrapperRef} className="codemirror-wrapper">
@@ -1770,6 +1799,13 @@ bracketMatching: false,
           y={contextMenu.position.y}
           items={contextMenu.items}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+      {imageViewer && imageViewer.show && (
+        <ImageViewer
+          src={imageViewer.src}
+          alt={imageViewer.alt}
+          onClose={() => setImageViewer(null)}
         />
       )}
     </div>
