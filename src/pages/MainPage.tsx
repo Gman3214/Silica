@@ -197,6 +197,32 @@ const MainPage: React.FC = () => {
     }
   };
 
+  // Get notes for autocomplete based on the current note's workspace
+  const getNotesForAutocomplete = () => {
+    if (!selectedNote || !projectPath) {
+      return [];
+    }
+
+    // Determine which workspace the current note belongs to
+    const noteDir = selectedNote.substring(0, selectedNote.lastIndexOf('/'));
+    
+    // Check if the note is in the root directory (default workspace)
+    if (noteDir === projectPath) {
+      // Return only root-level notes (excluding folders and workspaces)
+      return notes.filter(note => !note.isFolder && !note.isWorkspace);
+    }
+    
+    // Check if the note is in a workspace
+    const workspace = workspaces.find(ws => selectedNote.startsWith(ws.path + '/'));
+    if (workspace) {
+      // Return notes from that workspace
+      return folderContents.get(workspace.path) || [];
+    }
+    
+    // Fallback: return all notes
+    return notes.filter(note => !note.isFolder && !note.isWorkspace);
+  };
+
   const performSearch = async (query: string) => {
     if (!projectPath || !query.trim()) {
       setSearchResults([]);
@@ -1193,7 +1219,7 @@ const MainPage: React.FC = () => {
             noteTitle={noteTitle}
             noteContent={noteContent}
             openTabs={openTabs}
-            notes={notes}
+            notes={getNotesForAutocomplete()}
             workspaceTags={getWorkspaceTagNames()}
             projectPath={projectPath || undefined}
             onTitleChange={setNoteTitle}
