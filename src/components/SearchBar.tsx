@@ -7,8 +7,9 @@ interface SearchResult {
   name: string;
   path: string;
   isFolder: boolean;
-  matchType: 'title' | 'content';
+  matchType: 'title' | 'content' | 'ai-semantic';
   snippet?: string;
+  relevanceScore?: number;
 }
 
 interface SearchBarProps {
@@ -17,6 +18,7 @@ interface SearchBarProps {
   selectedNote: string | null;
   onSearchChange: (query: string) => void;
   onResultClick: (result: SearchResult) => void;
+  isAISearching?: boolean;
 }
 
 const SearchBar: React.FC<SearchBarProps> = ({
@@ -25,6 +27,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   selectedNote,
   onSearchChange,
   onResultClick,
+  isAISearching = false,
 }) => {
   return (
     <div className="global-search-header">
@@ -32,8 +35,14 @@ const SearchBar: React.FC<SearchBarProps> = ({
         <SearchInput
           value={searchQuery}
           onChange={onSearchChange}
-          placeholder="Search notes..."
+          placeholder="AI semantic search..."
         />
+        {isAISearching && (
+          <div className="ai-searching-indicator">
+            <span className="ai-loading"></span>
+            <span className="ai-text">AI analyzing...</span>
+          </div>
+        )}
         {searchQuery && (
           <SearchResults
             results={searchResults}

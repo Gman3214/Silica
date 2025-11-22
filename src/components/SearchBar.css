@@ -12,4 +12,40 @@
   position: relative;
   width: 700px;
   max-width: 90%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-searching-indicator {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.ai-text {
+  color: var(--text-secondary);
+}
+
+.ai-loading {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(var(--accent-rgb), 0.3);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: ai-spin 0.8s linear infinite;
+}
+
+@keyframes ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

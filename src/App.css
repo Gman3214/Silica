@@ -51,3 +51,33 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
 }
+
+/* Spellcheck underline styling */
+::spelling-error {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+}
+
+::grammar-error {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #F59E0B;
+  text-decoration-thickness: 2px;
+}
+
+/* For browsers that don't support ::spelling-error */
+*::-webkit-spelling-error {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+}
+
+*::-webkit-grammar-error {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #F59E0B;
+  text-decoration-thickness: 2px;
+}

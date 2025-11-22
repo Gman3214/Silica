@@ -46,6 +46,15 @@
   transition: background-color 0.2s ease;
 }
 
+/* Disable spellcheck underlines on note links */
+.codemirror-wrapper .note-link::spelling-error,
+.codemirror-wrapper .note-link::grammar-error,
+.codemirror-wrapper .note-link::-webkit-spelling-error,
+.codemirror-wrapper .note-link::-webkit-grammar-error {
+  text-decoration: none !important;
+  display: none !important;
+}
+
 .codemirror-wrapper .note-link:hover {
   background-color: var(--accent);
   color: var(--text-on-accent) !important;
@@ -61,6 +70,15 @@
   font-size: 0.9em;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+/* Disable spellcheck underlines on tags */
+.codemirror-wrapper .cm-tag::spelling-error,
+.codemirror-wrapper .cm-tag::grammar-error,
+.codemirror-wrapper .cm-tag::-webkit-spelling-error,
+.codemirror-wrapper .cm-tag::-webkit-grammar-error {
+  text-decoration: none !important;
+  display: none !important;
 }
 
 .codemirror-wrapper .cm-tag:hover {

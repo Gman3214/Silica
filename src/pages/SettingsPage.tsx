@@ -39,7 +39,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ theme, onThemeChange }) => 
     return localStorage.getItem('appFont') || 'system';
   });
   const [accentColor, setAccentColor] = useState(() => {
-    return localStorage.getItem('accentColor') || '#4DB8B8';
+    return localStorage.getItem('accentColor') || '#8DD4D4';
   });
   
   // AI Configuration state

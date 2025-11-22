@@ -1,13 +1,29 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './Sidebar.css';
-import logo from '../assets/logo.svg';
+import logoDark from '../assets/logo-dark.svg';
+import logoLight from '../assets/logo-light.svg';
 import feather from 'feather-icons';
 
 const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const iconsRef = useRef<HTMLDivElement>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+
+  useEffect(() => {
+    // Load theme from localStorage
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' || 'dark';
+    setTheme(savedTheme);
+
+    // Listen for theme changes via custom event
+    const handleThemeChange = (e: CustomEvent) => {
+      setTheme(e.detail);
+    };
+
+    window.addEventListener('themeChange', handleThemeChange as EventListener);
+    return () => window.removeEventListener('themeChange', handleThemeChange as EventListener);
+  }, []);
 
   const menuItems = [
     {
@@ -39,7 +55,7 @@ const Sidebar: React.FC = () => {
     <div className="sidebar">
       <div className="sidebar-header">
         <div className="app-logo">
-          <img src={logo} alt="Silica" />
+          <img src={theme === 'dark' ? logoDark : logoLight} alt="Silica" />
         </div>
       </div>
       <nav className="sidebar-nav">

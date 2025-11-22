@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import MainPage from './pages/MainPage';
 import SettingsPage from './pages/SettingsPage';
@@ -80,6 +80,9 @@ const App: React.FC = () => {
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
     document.documentElement.setAttribute('data-theme', newTheme);
+    
+    // Dispatch custom event for components to listen to
+    window.dispatchEvent(new CustomEvent('themeChange', { detail: newTheme }));
   };
 
   const handleProjectSelected = (folderPath: string) => {
@@ -100,15 +103,28 @@ const App: React.FC = () => {
     <Router>
       <div className="app-container">
         <Sidebar />
-        <div className="main-content">
-          <Routes>
-            <Route path="/" element={<MainPage />} />
-            <Route path="/settings" element={<SettingsPage theme={theme} onThemeChange={toggleTheme} />} />
-            <Route path="/addons" element={<AddonsPage />} />
-          </Routes>
-        </div>
+        <AppContent theme={theme} onThemeChange={toggleTheme} />
       </div>
     </Router>
+  );
+};
+
+// Separate component to use useLocation hook
+const AppContent: React.FC<{ theme: 'light' | 'dark'; onThemeChange: (theme: 'light' | 'dark') => void }> = ({ theme, onThemeChange }) => {
+  const location = useLocation();
+  
+  return (
+    <div className="main-content">
+      <div style={{ display: location.pathname === '/' ? 'flex' : 'none', width: '100%', height: '100%', flex: 1 }}>
+        <MainPage />
+      </div>
+      <div style={{ display: location.pathname === '/settings' ? 'flex' : 'none', width: '100%', height: '100%', flex: 1 }}>
+        <SettingsPage theme={theme} onThemeChange={onThemeChange} />
+      </div>
+      <div style={{ display: location.pathname === '/addons' ? 'flex' : 'none', width: '100%', height: '100%', flex: 1 }}>
+        <AddonsPage />
+      </div>
+    </div>
   );
 };
 

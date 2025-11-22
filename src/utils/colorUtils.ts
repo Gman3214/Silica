@@ -63,14 +63,14 @@ export function applyAccentColor(color: string): void {
 
 // Preset accent colors
 export const PRESET_COLORS = [
-  { name: 'Teal (Default)', value: '#4DB8B8' },
-  { name: 'Blue', value: '#3B82F6' },
-  { name: 'Purple', value: '#8B5CF6' },
-  { name: 'Pink', value: '#EC4899' },
-  { name: 'Red', value: '#EF4444' },
-  { name: 'Orange', value: '#F59E0B' },
-  { name: 'Green', value: '#10B981' },
-  { name: 'Cyan', value: '#06B6D4' },
-  { name: 'Indigo', value: '#6366F1' },
-  { name: 'Emerald', value: '#059669' },
+  { name: 'Teal (Default)', value: '#8DD4D4' },
+  { name: 'Lavender', value: '#B4A7D6' },
+  { name: 'Mint', value: '#A8D8B9' },
+  { name: 'Peach', value: '#F5B895' },
+  { name: 'Sky Blue', value: '#A3C4F3' },
+  { name: 'Rose', value: '#F2B5D4' },
+  { name: 'Coral', value: '#F4A6A6' },
+  { name: 'Lemon', value: '#F9E79F' },
+  { name: 'Sage', value: '#B8D4BE' },
+  { name: 'Periwinkle', value: '#C5B9E8' },
 ];

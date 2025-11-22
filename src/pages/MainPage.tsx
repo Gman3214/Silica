@@ -4,6 +4,7 @@ import NotesSidebar from '../components/NotesSidebar';
 import EditorArea from '../components/EditorArea';
 import SearchBar from '../components/SearchBar';
 import RightSidebar from '../components/RightSidebar';
+import { getAISearch } from '../utils/aiSearch';
 import './MainPage.css';
 
 interface Note {
@@ -26,8 +27,9 @@ interface SearchResult {
   name: string;
   path: string;
   isFolder: boolean;
-  matchType: 'title' | 'content';
+  matchType: 'title' | 'content' | 'ai-semantic';
   snippet?: string;
+  relevanceScore?: number;
 }
 
 const MainPage: React.FC = () => {
@@ -49,6 +51,7 @@ const MainPage: React.FC = () => {
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState('New Workspace');
   const [newWorkspaceColor, setNewWorkspaceColor] = useState('#3b82f6');
+  const [isAISearching, setIsAISearching] = useState(false);
   const [newWorkspaceIcon, setNewWorkspaceIcon] = useState('folder');
   const [draggedNote, setDraggedNote] = useState<Note | null>(null);
   const [folderContents, setFolderContents] = useState<Map<string, Note[]>>(new Map());
@@ -226,15 +229,82 @@ const MainPage: React.FC = () => {
   const performSearch = async (query: string) => {
     if (!projectPath || !query.trim()) {
       setSearchResults([]);
+      setIsAISearching(false);
       return;
     }
 
     try {
-      const results = await window.electronAPI.searchNotes(projectPath, query);
-      setSearchResults(results);
+      // Start both searches in parallel
+      const regularSearchPromise = window.electronAPI.searchNotes(projectPath, query);
+      
+      // Get workspace notes for filtering
+      const workspaceNotes = getFilteredNotes();
+      const workspaceNotePaths = new Set(workspaceNotes.map(n => n.path));
+      
+      // Start AI search
+      setIsAISearching(true);
+      const aiSearch = getAISearch();
+      const isAvailable = await aiSearch.isAvailable();
+      
+      let aiSearchResults: SearchResult[] = [];
+      
+      if (isAvailable) {
+        // Get notes with content for AI analysis
+        const notesWithContent = await Promise.all(
+          workspaceNotes
+            .filter(note => !note.isFolder && !note.isWorkspace)
+            .map(async (note) => {
+              try {
+                const content = await window.electronAPI.readNote(note.path);
+                return {
+                  path: note.path,
+                  name: note.name,
+                  content: content || '',
+                };
+              } catch (error) {
+                console.error(`Failed to read note ${note.path}:`, error);
+                return null;
+              }
+            })
+        );
+
+        const validNotes = notesWithContent.filter((n): n is { path: string; name: string; content: string } => n !== null);
+        
+        // Perform AI search
+        const aiResults = await aiSearch.search(query, validNotes);
+        
+        // Convert AI results to SearchResult format
+        aiSearchResults = aiResults.map(result => ({
+          name: result.name,
+          path: result.path,
+          isFolder: false,
+          matchType: 'ai-semantic' as const,
+          snippet: result.snippet,
+          relevanceScore: result.relevanceScore,
+        }));
+      } else {
+        console.warn('AI search not available, using regular search only');
+      }
+      
+      setIsAISearching(false);
+      
+      // Wait for regular search to complete
+      const regularResults = await regularSearchPromise;
+      
+      // Filter regular results to current workspace
+      const filteredRegularResults = regularResults.filter(r => workspaceNotePaths.has(r.path));
+      
+      // Remove regular results that are already in AI results
+      const aiResultPaths = new Set(aiSearchResults.map(r => r.path));
+      const uniqueRegularResults = filteredRegularResults.filter(r => !aiResultPaths.has(r.path));
+      
+      // Combine: AI results first (sorted by relevance), then regular results
+      const combinedResults = [...aiSearchResults, ...uniqueRegularResults];
+      
+      setSearchResults(combinedResults);
     } catch (error) {
       console.error('Failed to search notes:', error);
-      setSearchResults([]);
+      setIsAISearching(false);
     }
   };
 
@@ -245,7 +315,7 @@ const MainPage: React.FC = () => {
     }, 300); // Search after 300ms of no typing
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, projectPath]);
+  }, [searchQuery, projectPath, activeWorkspace]);
 
   const toggleTag = (tag: string) => {
     setExpandedTags(prev => {
@@ -1151,6 +1221,7 @@ const MainPage: React.FC = () => {
             setSearchQuery('');
           }
         }}
+        isAISearching={isAISearching}
       />
       <div className="notes-container">
         <div className="notes-sidebar-wrapper" style={{ width: `${sidebarWidth}px` }}>
