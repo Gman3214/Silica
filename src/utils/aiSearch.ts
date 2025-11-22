@@ -1,4 +1,5 @@
 import { aiRouter } from '../lib/ai-router';
+import { embeddingService } from './embeddingService';
 
 interface Note {
   name: string;
@@ -50,25 +51,54 @@ export class AISearch {
         return [];
       }
 
-      // Create a context of all notes for the AI
-      const notesContext = searchableNotes.map((note, index) => {
-        const title = note.name.replace('.md', '');
-        const preview = note.content?.slice(0, 500) || '';
-        return `[${index}] Title: "${title}"\nContent preview: ${preview}`;
-      }).join('\n\n---\n\n');
+      // RAG Step 1: Use embeddings to retrieve top 5 candidates (fast, semantic retrieval)
+      console.log(`RAG: Retrieving top 5 from ${searchableNotes.length} notes with embeddings...`);
+      
+      const notesForEmbedding = searchableNotes.map(note => ({
+        path: note.path,
+        name: note.name,
+        content: note.content || '',
+      }));
 
-      // Create the AI prompt
-      const prompt = `You are a semantic search assistant. Given a user's search query and a list of notes, identify which notes are most relevant.
+      const embeddingResults = await embeddingService.searchNotes(query, notesForEmbedding, 5);
+      
+      if (embeddingResults.length === 0) {
+        return [];
+      }
+
+      console.log(`RAG: Retrieved ${embeddingResults.length} candidates, sending to AI for re-ranking...`);
+      
+      // Get the full note objects for the top 5 candidates
+      const candidateNotes = embeddingResults.map(r => 
+        searchableNotes.find(n => n.path === r.path)!
+      );
+
+      // RAG Step 2: Use AI to augment and re-rank based on full content
+      // Create detailed context with FULL content of top 5 candidates
+      const notesContext = candidateNotes.map((note, index) => {
+        const title = note.name.replace('.md', '');
+        const fullContent = note.content || '';
+        return `[${index}] Title: "${title}"\n\nFull Content:\n${fullContent}\n\n---`;
+      }).join('\n\n');
+
+      // Create the AI prompt for re-ranking
+      const prompt = `You are a semantic search assistant using RAG (Retrieval-Augmented Generation). You've been given the top 5 most similar notes based on embedding similarity. Now re-rank them based on their FULL content and relevance to the user's query.
 
 User query: "${query}"
 
-Available notes:
+Top 5 Retrieved Notes:
 ${notesContext}
 
-Analyze the query and return ONLY a JSON array of relevant note indices with relevance scores (0-100). Format:
-[{"index": 0, "score": 95, "reason": "brief explanation"}, ...]
+Carefully analyze the FULL CONTENT of each note and return a JSON array with re-ranked results. Format:
+[{"index": 0, "score": 95, "reason": "brief explanation of why this is most relevant"}, ...]
 
-Return only notes with score >= 50. If no notes are relevant, return an empty array [].`;
+Rules:
+- Only include notes with score >= 50
+- Consider semantic meaning, context, and how well the content answers the query
+- The order should reflect true relevance to the query, not just keyword matching
+- Provide scores 0-100 where 100 is perfectly relevant
+
+Return ONLY the JSON array, no other text.`;
 
       // Get AI response using aiRouter
       const response = await aiRouter.chatCompletion({
@@ -79,18 +109,20 @@ Return only notes with score >= 50. If no notes are relevant, return an empty ar
           }
         ],
         options: {
-          temperature: 0.3, // Lower temperature for more focused results
+          temperature: 0.2, // Low temperature for consistent re-ranking
         }
       });
 
       // Parse AI response
       const aiResults = this.parseAIResponse(response.content);
       
+      console.log(`RAG: AI re-ranked to ${aiResults.length} final results`);
+      
       // Convert AI results to search results
       const searchResults: SearchResult[] = aiResults
-        .filter(r => r.index < searchableNotes.length)
+        .filter(r => r.index < candidateNotes.length)
         .map(r => {
-          const note = searchableNotes[r.index];
+          const note = candidateNotes[r.index];
           return {
             name: note.name,
             path: note.path,
@@ -100,7 +132,8 @@ Return only notes with score >= 50. If no notes are relevant, return an empty ar
             relevanceScore: r.score,
           };
         })
-        .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+        .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
+        .slice(0, 3); // Return only top 3 results to user
 
       return searchResults;
     } catch (error) {

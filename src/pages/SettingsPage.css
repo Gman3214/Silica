@@ -527,3 +527,54 @@
   border-color: var(--text-primary);
   box-shadow: 0 0 0 2px rgba(var(--accent-rgb, 77, 184, 184), 0.3);
 }
+
+/* AI Search / Embedding Cache */
+.cache-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.cache-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cache-label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cache-value {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 2px 8px;
+  background: rgba(var(--accent-rgb), 0.1);
+  border-radius: 4px;
+}
+
+.clear-cache-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 16px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+}
+
+.clear-cache-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.clear-cache-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

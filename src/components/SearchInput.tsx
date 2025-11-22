@@ -4,14 +4,22 @@ import './SearchInput.css';
 interface SearchInputProps {
   value: string;
   onChange: (value: string) => void;
+  onSearch?: () => void;
   placeholder?: string;
 }
 
 const SearchInput: React.FC<SearchInputProps> = ({
   value,
   onChange,
+  onSearch,
   placeholder = 'Search notes...',
 }) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && onSearch) {
+      onSearch();
+    }
+  };
+
   return (
     <div className="search-input-wrapper">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="search-icon">
@@ -23,6 +31,7 @@ const SearchInput: React.FC<SearchInputProps> = ({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
         className="search-input"
       />
     </div>

@@ -18,6 +18,7 @@ interface SearchBarProps {
   selectedNote: string | null;
   onSearchChange: (query: string) => void;
   onResultClick: (result: SearchResult) => void;
+  onSearch?: () => void;
   isAISearching?: boolean;
 }
 
@@ -27,6 +28,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   selectedNote,
   onSearchChange,
   onResultClick,
+  onSearch,
   isAISearching = false,
 }) => {
   return (
@@ -35,6 +37,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
         <SearchInput
           value={searchQuery}
           onChange={onSearchChange}
+          onSearch={onSearch}
           placeholder="AI semantic search..."
         />
         {isAISearching && (

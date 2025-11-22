@@ -52,6 +52,7 @@ const MainPage: React.FC = () => {
   const [newWorkspaceName, setNewWorkspaceName] = useState('New Workspace');
   const [newWorkspaceColor, setNewWorkspaceColor] = useState('#3b82f6');
   const [isAISearching, setIsAISearching] = useState(false);
+  const [searchTrigger, setSearchTrigger] = useState(0);
   const [newWorkspaceIcon, setNewWorkspaceIcon] = useState('folder');
   const [draggedNote, setDraggedNote] = useState<Note | null>(null);
   const [folderContents, setFolderContents] = useState<Map<string, Note[]>>(new Map());
@@ -234,72 +235,67 @@ const MainPage: React.FC = () => {
     }
 
     try {
-      // Start both searches in parallel
-      const regularSearchPromise = window.electronAPI.searchNotes(projectPath, query);
-      
       // Get workspace notes for filtering
       const workspaceNotes = getFilteredNotes();
       const workspaceNotePaths = new Set(workspaceNotes.map(n => n.path));
       
-      // Start AI search
+      // Step 1: Perform regular search FIRST and show results immediately
+      const regularResults = await window.electronAPI.searchNotes(projectPath, query);
+      const filteredRegularResults = regularResults.filter(r => workspaceNotePaths.has(r.path));
+      
+      // Show regular results immediately
+      setSearchResults(filteredRegularResults);
+      
+      // Step 2: Then enhance with AI search in the background
       setIsAISearching(true);
       const aiSearch = getAISearch();
       const isAvailable = await aiSearch.isAvailable();
       
-      let aiSearchResults: SearchResult[] = [];
-      
-      if (isAvailable) {
-        // Get notes with content for AI analysis
-        const notesWithContent = await Promise.all(
-          workspaceNotes
-            .filter(note => !note.isFolder && !note.isWorkspace)
-            .map(async (note) => {
-              try {
-                const content = await window.electronAPI.readNote(note.path);
-                return {
-                  path: note.path,
-                  name: note.name,
-                  content: content || '',
-                };
-              } catch (error) {
-                console.error(`Failed to read note ${note.path}:`, error);
-                return null;
-              }
-            })
-        );
-
-        const validNotes = notesWithContent.filter((n): n is { path: string; name: string; content: string } => n !== null);
-        
-        // Perform AI search
-        const aiResults = await aiSearch.search(query, validNotes);
-        
-        // Convert AI results to SearchResult format
-        aiSearchResults = aiResults.map(result => ({
-          name: result.name,
-          path: result.path,
-          isFolder: false,
-          matchType: 'ai-semantic' as const,
-          snippet: result.snippet,
-          relevanceScore: result.relevanceScore,
-        }));
-      } else {
+      if (!isAvailable) {
         console.warn('AI search not available, using regular search only');
+        setIsAISearching(false);
+        return; // Keep showing regular results
       }
+
+      // Get notes with content for AI analysis
+      const notesWithContent = await Promise.all(
+        workspaceNotes
+          .filter(note => !note.isFolder && !note.isWorkspace)
+          .map(async (note) => {
+            try {
+              const content = await window.electronAPI.readNote(note.path);
+              return {
+                path: note.path,
+                name: note.name,
+                content: content || '',
+              };
+            } catch (error) {
+              console.error(`Failed to read note ${note.path}:`, error);
+              return null;
+            }
+          })
+      );
+
+      const validNotes = notesWithContent.filter((n): n is { path: string; name: string; content: string } => n !== null);
+      
+      // Perform AI search
+      const aiResults = await aiSearch.search(query, validNotes);
+      
+      // Convert AI results to SearchResult format
+      const aiSearchResults: SearchResult[] = aiResults.map(result => ({
+        name: result.name,
+        path: result.path,
+        isFolder: false,
+        matchType: 'ai-semantic' as const,
+        snippet: result.snippet,
+        relevanceScore: result.relevanceScore,
+      }));
       
       setIsAISearching(false);
       
-      // Wait for regular search to complete
-      const regularResults = await regularSearchPromise;
-      
-      // Filter regular results to current workspace
-      const filteredRegularResults = regularResults.filter(r => workspaceNotePaths.has(r.path));
-      
-      // Remove regular results that are already in AI results
-      const aiResultPaths = new Set(aiSearchResults.map(r => r.path));
-      const uniqueRegularResults = filteredRegularResults.filter(r => !aiResultPaths.has(r.path));
-      
-      // Combine: AI results first (sorted by relevance), then regular results
-      const combinedResults = [...aiSearchResults, ...uniqueRegularResults];
+      // Step 3: Combine results - keep ALL regular results, add AI results at top
+      // Regular results that appear in AI results will show in both sections
+      const combinedResults = [...aiSearchResults, ...filteredRegularResults];
       
       setSearchResults(combinedResults);
     } catch (error) {
@@ -310,12 +306,32 @@ const MainPage: React.FC = () => {
 
   // Debounce search
   useEffect(() => {
+    // Don't search if query is empty
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsAISearching(false);
+      return;
+    }
+
     const timeoutId = setTimeout(() => {
       performSearch(searchQuery);
-    }, 300); // Search after 300ms of no typing
+    }, 1500); // Search after 1.5 seconds of no typing
 
     return () => clearTimeout(timeoutId);
   }, [searchQuery, projectPath, activeWorkspace]);
+
+  // Manual search trigger (for Enter key)
+  useEffect(() => {
+    if (searchTrigger > 0 && searchQuery.trim()) {
+      performSearch(searchQuery);
+    }
+  }, [searchTrigger]);
+
+  const handleManualSearch = () => {
+    if (searchQuery.trim()) {
+      setSearchTrigger(prev => prev + 1);
+    }
+  };
 
   const toggleTag = (tag: string) => {
     setExpandedTags(prev => {
@@ -1221,6 +1237,7 @@ const MainPage: React.FC = () => {
             setSearchQuery('');
           }
         }}
+        onSearch={handleManualSearch}
         isAISearching={isAISearching}
       />
       <div className="notes-container">

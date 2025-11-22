@@ -3,6 +3,7 @@ import SearchBar from '../components/SearchBar';
 import type { ModelInfo } from '../lib/ollama/types';
 import { getPluginSettings, savePluginSettings, PLUGIN_LABELS, PLUGIN_DESCRIPTIONS, PluginSettings } from '../utils/pluginSettings';
 import { applyAccentColor, PRESET_COLORS } from '../utils/colorUtils';
+import { embeddingService } from '../utils/embeddingService';
 import './SettingsPage.css';
 
 interface SettingsPageProps {
@@ -59,7 +60,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ theme, onThemeChange }) => 
   const [editingCommand, setEditingCommand] = useState<AICommand | null>(null);
   const [newCommandLabel, setNewCommandLabel] = useState('');
   const [newCommandPrompt, setNewCommandPrompt] = useState('');
-
+  const [embeddingCacheSize, setEmbeddingCacheSize] = useState(0);
   const handlePluginToggle = (key: keyof PluginSettings) => {
     const newSettings = { ...pluginSettings, [key]: !pluginSettings[key] };
     setPluginSettings(newSettings);
@@ -161,6 +162,24 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ theme, onThemeChange }) => 
       localStorage.setItem('ollamaSettings', JSON.stringify(settings));
     }
   }, [aiProvider, ollamaUrl, selectedModel]);
+
+  // Update embedding cache size
+  useEffect(() => {
+    const updateCacheSize = () => {
+      setEmbeddingCacheSize(embeddingService.getCacheSize());
+    };
+    
+    updateCacheSize();
+    const interval = setInterval(updateCacheSize, 5000); // Update every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleClearEmbeddingCache = () => {
+    embeddingService.clearCache();
+    setEmbeddingCacheSize(0);
+  };
+
 
   const fetchOllamaModels = async () => {
     setLoadingModels(true);
@@ -533,6 +552,30 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ theme, onThemeChange }) => 
               <label>Notes Directory</label>
               <input type="text" placeholder="~/Documents/Silica" />
               <button className="browse-btn">Browse</button>
+            </div>
+          </div>
+
+          <div className="settings-section">
+            <h2>AI Search</h2>
+            <p className="section-description">RAG-powered semantic search: Embeddings retrieve top 5 candidates, AI re-ranks based on full content</p>
+            
+            <div className="setting-item">
+              <div className="cache-info">
+                <div className="cache-stats">
+                  <span className="cache-label">✨ Embedding Cache:</span>
+                  <span className="cache-value">{embeddingCacheSize} notes cached</span>
+                </div>
+                <p className="setting-hint">
+                  RAG (Retrieval-Augmented Generation): Embeddings quickly find top 5 similar notes (~50MB model, downloads once), then AI analyzes full content for precise ranking.
+                </p>
+              </div>
+              <button 
+                className="clear-cache-btn"
+                onClick={handleClearEmbeddingCache}
+                disabled={embeddingCacheSize === 0}
+              >
+                Clear Cache
+              </button>
             </div>
           </div>
 
