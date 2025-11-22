@@ -13,7 +13,7 @@
 .codemirror-wrapper .cm-scroller {
   overflow-y: visible !important;
   overflow-x: hidden !important;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  font-family: var(--app-font);
   max-width: 100%;
 }
 
@@ -259,7 +259,7 @@
 
 /* Markdown table styling */
 .codemirror-wrapper .cm-line:has(.cm-table, .cm-table-header) {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  font-family: var(--app-font);
 }
 
 /* Hide table pipes but keep structure */

@@ -80,6 +80,25 @@
   color: var(--text-primary);
   font-size: 14px;
   transition: all 0.2s ease;
+  max-height: 200px;
+}
+
+.setting-item select {
+  cursor: pointer;
+  overflow-y: auto;
+}
+
+.setting-item select optgroup {
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  padding: 8px 0;
+}
+
+.setting-item select option {
+  padding: 8px 15px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .setting-item input:focus,
@@ -475,4 +494,36 @@
 .ai-command-edit-input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* Accent Color Picker */
+.color-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.color-preset-btn {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 36px;
+}
+
+.color-preset-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.color-preset-btn.active {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb, 77, 184, 184), 0.3);
 }

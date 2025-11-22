@@ -1451,10 +1451,10 @@ const MarkdownEditor = forwardRef<any, MarkdownEditorProps>(({
     },
     '.cm-scroller': {
       backgroundColor: 'var(--bg-primary)',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", sans-serif',
+      fontFamily: 'var(--app-font)',
     },
     '.cm-content': {
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", sans-serif',
+      fontFamily: 'var(--app-font)',
       padding: '0',
       caretColor: 'var(--text-primary)',
       color: 'var(--text-primary)',

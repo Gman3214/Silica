@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import './NoteList.css';
+import feather from 'feather-icons';
 
 interface Note {
   name: string;
@@ -65,6 +66,11 @@ const NoteList: React.FC<NoteListProps> = ({
   onNewNote,
   formatDate,
 }) => {
+  // Replace feather icons after render
+  useEffect(() => {
+    feather.replace();
+  });
+
   // Organize tags into a hierarchical structure
   const buildTagHierarchy = () => {
     const hierarchy: { [key: string]: any } = {};
@@ -117,10 +123,7 @@ const NoteList: React.FC<NoteListProps> = ({
             >
               <path d="M3 5L6 8L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="tag-icon">
-              <path d="M3 3L9 3L13 7L8 12L4 8L3 3Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-              <circle cx="7.5" cy="6.5" r="1" fill="currentColor"/>
-            </svg>
+            <i data-feather="tag" className="tag-icon" style={{ width: '16px', height: '16px' }}></i>
             <h3>{tagName}</h3>
             {totalCount > 0 && <span className="tag-count">{totalCount}</span>}
           </div>
@@ -164,11 +167,7 @@ const NoteList: React.FC<NoteListProps> = ({
         <>
           {/* Add Note Button */}
           <button className="add-note-list-btn" onClick={onNewNote} title="New Note">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3 2H10L13 5V14H3V2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-              <path d="M10 2V5H13" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-              <path d="M8 7V11M6 9H10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
+            <i data-feather="file-plus" style={{ width: '16px', height: '16px' }}></i>
             <span>New Note</span>
           </button>
           

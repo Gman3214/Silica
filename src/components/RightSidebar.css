@@ -190,6 +190,7 @@
   font-size: 12px;
   text-align: center;
   margin-bottom: -1px;
+  font-family: var(--app-font);
 }
 
 .tab-btn:hover {

@@ -45,6 +45,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: var(--app-font);
 }
 
 .result-snippet {
@@ -57,6 +58,7 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: var(--app-font);
 }
 
 .search-result-item .result-icon {

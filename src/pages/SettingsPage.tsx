@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import SearchBar from '../components/SearchBar';
 import type { ModelInfo } from '../lib/ollama/types';
 import { getPluginSettings, savePluginSettings, PLUGIN_LABELS, PLUGIN_DESCRIPTIONS, PluginSettings } from '../utils/pluginSettings';
+import { applyAccentColor, PRESET_COLORS } from '../utils/colorUtils';
 import './SettingsPage.css';
 
 interface SettingsPageProps {
@@ -34,6 +35,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ theme, onThemeChange }) => 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [pluginSettings, setPluginSettings] = useState<PluginSettings>(getPluginSettings());
+  const [selectedFont, setSelectedFont] = useState(() => {
+    return localStorage.getItem('appFont') || 'system';
+  });
+  const [accentColor, setAccentColor] = useState(() => {
+    return localStorage.getItem('accentColor') || '#4DB8B8';
+  });
   
   // AI Configuration state
   const [aiProvider, setAiProvider] = useState('none');
@@ -58,6 +65,68 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ theme, onThemeChange }) => 
     setPluginSettings(newSettings);
     savePluginSettings(newSettings);
   };
+
+  // Handle accent color change
+  const handleAccentColorChange = (color: string) => {
+    setAccentColor(color);
+    localStorage.setItem('accentColor', color);
+    applyAccentColor(color);
+  };
+
+  // Handle font change
+  const handleFontChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const font = e.target.value;
+    setSelectedFont(font);
+    localStorage.setItem('appFont', font);
+    
+    // Apply font to document root
+    const fontFamilies: { [key: string]: string } = {
+      'system': '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", sans-serif',
+      'inter': '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+      'roboto': '"Roboto", -apple-system, BlinkMacSystemFont, sans-serif',
+      'open-sans': '"Open Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+      'poppins': '"Poppins", -apple-system, BlinkMacSystemFont, sans-serif',
+      'lato': '"Lato", -apple-system, BlinkMacSystemFont, sans-serif',
+      'nunito': '"Nunito", -apple-system, BlinkMacSystemFont, sans-serif',
+      'fira-code': '"Fira Code", "Monaco", "Consolas", monospace',
+      'jetbrains': '"JetBrains Mono", "Monaco", "Consolas", monospace',
+      'source-code-pro': '"Source Code Pro", "Monaco", "Consolas", monospace',
+      'ubuntu-mono': '"Ubuntu Mono", "Monaco", "Consolas", monospace',
+      'inconsolata': '"Inconsolata", "Monaco", "Consolas", monospace',
+      'cascadia-code': '"Cascadia Code", "Monaco", "Consolas", monospace',
+      'roboto-mono': '"Roboto Mono", "Monaco", "Consolas", monospace',
+    };
+    
+    document.documentElement.style.setProperty('--app-font', fontFamilies[font] || fontFamilies.system);
+  };
+
+  // Apply saved font on mount
+  useEffect(() => {
+    const savedFont = localStorage.getItem('appFont') || 'system';
+    const fontFamilies: { [key: string]: string } = {
+      'system': '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", sans-serif',
+      'inter': '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+      'roboto': '"Roboto", -apple-system, BlinkMacSystemFont, sans-serif',
+      'open-sans': '"Open Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+      'poppins': '"Poppins", -apple-system, BlinkMacSystemFont, sans-serif',
+      'lato': '"Lato", -apple-system, BlinkMacSystemFont, sans-serif',
+      'nunito': '"Nunito", -apple-system, BlinkMacSystemFont, sans-serif',
+      'fira-code': '"Fira Code", "Monaco", "Consolas", monospace',
+      'jetbrains': '"JetBrains Mono", "Monaco", "Consolas", monospace',
+      'source-code-pro': '"Source Code Pro", "Monaco", "Consolas", monospace',
+      'ubuntu-mono': '"Ubuntu Mono", "Monaco", "Consolas", monospace',
+      'inconsolata': '"Inconsolata", "Monaco", "Consolas", monospace',
+      'cascadia-code': '"Cascadia Code", "Monaco", "Consolas", monospace',
+      'roboto-mono': '"Roboto Mono", "Monaco", "Consolas", monospace',
+    };
+    document.documentElement.style.setProperty('--app-font', fontFamilies[savedFont] || fontFamilies.system);
+
+    // Apply saved accent color
+    const savedAccentColor = localStorage.getItem('accentColor');
+    if (savedAccentColor) {
+      applyAccentColor(savedAccentColor);
+    }
+  }, []);
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -213,6 +282,51 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ theme, onThemeChange }) => 
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
               </select>
+            </div>
+            <div className="setting-item">
+              <label>Accent Color</label>
+              <div className="color-preset-grid">
+                {PRESET_COLORS.map((preset) => (
+                  <button
+                    key={preset.value}
+                    className={`color-preset-btn ${accentColor === preset.value ? 'active' : ''}`}
+                    style={{ backgroundColor: preset.value }}
+                    onClick={() => handleAccentColorChange(preset.value)}
+                    title={preset.name}
+                  >
+                    {accentColor === preset.value && (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <p className="setting-hint">Changes the accent color throughout the app including buttons, links, and logo.</p>
+            </div>
+            <div className="setting-item">
+              <label>Font Family</label>
+              <select value={selectedFont} onChange={handleFontChange}>
+                <optgroup label="Sans-Serif Fonts">
+                  <option value="system">System Default</option>
+                  <option value="inter">Inter</option>
+                  <option value="roboto">Roboto</option>
+                  <option value="open-sans">Open Sans</option>
+                  <option value="poppins">Poppins</option>
+                  <option value="lato">Lato</option>
+                  <option value="nunito">Nunito</option>
+                </optgroup>
+                <optgroup label="Monospace Fonts">
+                  <option value="fira-code">Fira Code</option>
+                  <option value="jetbrains">JetBrains Mono</option>
+                  <option value="source-code-pro">Source Code Pro</option>
+                  <option value="ubuntu-mono">Ubuntu Mono</option>
+                  <option value="cascadia-code">Cascadia Code</option>
+                  <option value="inconsolata">Inconsolata</option>
+                  <option value="roboto-mono">Roboto Mono</option>
+                </optgroup>
+              </select>
+              <p className="setting-hint">All fonts are bundled with the application. Note: Nerd Font variants (with icons) require system installation.</p>
             </div>
             <div className="setting-item">
               <label>Font Size</label>

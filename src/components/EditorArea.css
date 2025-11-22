@@ -23,6 +23,7 @@
   font-size: 28px;
   font-weight: 600;
   outline: none;
+  font-family: var(--app-font);
 }
 
 .note-title-input::placeholder {
